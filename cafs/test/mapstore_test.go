@@ -3,7 +3,7 @@ package test
 import (
 	"testing"
 
-	"github.com/qri-io/cafs"
+	"github.com/qri-io/qfs/cafs"
 )
 
 func TestMemFilestore(t *testing.T) {

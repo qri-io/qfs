@@ -6,7 +6,7 @@ import (
 	"io"
 
 	logging "github.com/ipfs/go-log"
-	cafs "github.com/qri-io/cafs"
+	cafs "github.com/qri-io/qfs/cafs"
 	"github.com/qri-io/qfs"
 
 	// Note coreunix is forked form github.com/ipfs/go-ipfs/core/coreunix
@@ -15,7 +15,7 @@ import (
 	// moving toward coreapi.coreUnix().Add() with properly-configured options,
 	// but I'd like a test before we do that. We may also want to consider switching
 	// Qri to writing IPLD. Lots to think about.
-	coreunix "github.com/qri-io/cafs/ipfs/coreunix"
+	coreunix "github.com/qri-io/qfs/cafs/ipfs/coreunix"
 
 	path "gx/ipfs/QmT3rzed1ppXefourpmoZ7tyVQfsGPQZ1pHDngLmCvXxd3/go-path"
 	core "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/core"
