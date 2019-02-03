@@ -1,10 +1,10 @@
 {
   "author": "qri-io",
   "bugs": {
-    "url": "https://github.com/qri-io/cafs"
+    "url": "https://github.com/qri-io/qfs/cafs"
   },
   "gx": {
-    "dvcsimport": "github.com/qri-io/cafs"
+    "dvcsimport": "github.com/qri-io/qfs/cafs"
   },
   "gxDependencies": [
     {

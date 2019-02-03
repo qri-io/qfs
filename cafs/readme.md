@@ -1,7 +1,7 @@
 # cafs
 
 [![Qri](https://img.shields.io/badge/made%20by-qri-magenta.svg?style=flat-square)](https://qri.io)
-[![GoDoc](https://godoc.org/github.com/qri-io/cafs?status.svg)](http://godoc.org/github.com/qri-io/cafs)
+[![GoDoc](https://godoc.org/github.com/qri-io/qfs/cafs?status.svg)](http://godoc.org/github.com/qri-io/qfs/cafs)
 [![License](https://img.shields.io/github/license/qri-io/cafs.svg?style=flat-square)](./LICENSE)
 [![Codecov](https://img.shields.io/codecov/c/github/qri-io/cafs.svg?style=flat-square)](https://codecov.io/gh/qri-io/cafs)
 [![CI](https://img.shields.io/circleci/project/github/qri-io/cafs.svg?style=flat-square)](https://circleci.com/gh/qri-io/cafs)

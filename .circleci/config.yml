@@ -1,12 +1,11 @@
 version: '2'
 jobs:
   build:
-    working_directory: /go/src/github.com/qri-io/cafs
+    working_directory: /go/src/github.com/qri-io/qfs
     docker:
       - image: circleci/golang:1.11
         environment:
           GOLANG_ENV: test
-          PORT: 3000
     environment:
       TEST_RESULTS: /tmp/test-results
     steps:
@@ -31,7 +30,6 @@ jobs:
             github.com/multiformats/go-multihash
             github.com/spaolacci/murmur3
             golang.org/x/crypto/blake2b
-            cloud.google.com/go/storage
             github.com/ipfs/go-log
       - restore_cache:
           key: dependency-cache-{{ checksum "package.json" }}

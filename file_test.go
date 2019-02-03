@@ -1,4 +1,4 @@
-package cafs
+package qfs
 
 import (
 	"testing"
@@ -29,7 +29,7 @@ func TestMemfile(t *testing.T) {
 		"/a/c/e",
 		"/a/c/e/f.txt",
 		"/a/h.txt",
-		"/a/i/j.txt",
+		"/a/j.txt",
 		"/a/g.txt",
 	}
 
