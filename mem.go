@@ -1,12 +1,7 @@
 package qfs
 
-// MemFSStore is the minimum interface for creating a MemFS
-type MemFSStore interface {
-	Get(path string) (File, error)
-}
-
 // NewMemFS creates an in-memory filesystem from a set of files
-func NewMemFS(store MemFSStore) *MemFS {
+func NewMemFS(store Filesystem) *MemFS {
 	return &MemFS{
 		store: store,
 	}
@@ -16,7 +11,7 @@ func NewMemFS(store MemFSStore) *MemFS {
 // minimal wrapper around anything that supports getting a file with a
 // string key
 type MemFS struct {
-	store MemFSStore
+	store Filesystem
 }
 
 // Get implements PathResolver interface
