@@ -28,6 +28,12 @@ type Filesystem interface {
 	PathResolver
 }
 
+// Destroyer is an optional interface to tear down a filesystem, removing all
+// persisted resources
+type Destroyer interface {
+	Destroy() error
+}
+
 // AbsPath adjusts the provided string to a path lib functions can work with
 // because paths for Qri can come from the local filesystem, an http url, or
 // the distributed web, Absolutizing is a little tricky
