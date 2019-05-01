@@ -75,7 +75,7 @@ func OptsFromMap(opts map[string]interface{}) Option {
 	}
 }
 
-func (cfg *StoreCfg) InitRepo() error {
+func (cfg *StoreCfg) InitRepo(ctx context.Context) error {
 	if cfg.NilRepo {
 		return nil
 	}
@@ -88,8 +88,12 @@ func (cfg *StoreCfg) InitRepo() error {
 			if err == fsrepo.ErrNeedMigration {
 				return ErrIPFSRepoNeedsMigration
 			}
-			return fmt.Errorf("error opening local filestore ipfs repository: %s\n", err.Error())
+			return fmt.Errorf("error opening local filestore ipfs repository: %s", err.Error())
 		}
+		go func() {
+			<-ctx.Done()
+			localRepo.Close()
+		}()
 		cfg.Repo = localRepo
 	}
 	return nil

@@ -6,8 +6,8 @@ import (
 	"io"
 
 	logging "github.com/ipfs/go-log"
-	cafs "github.com/qri-io/qfs/cafs"
 	"github.com/qri-io/qfs"
+	cafs "github.com/qri-io/qfs/cafs"
 
 	// Note coreunix is forked form github.com/ipfs/go-ipfs/core/coreunix
 	// we need coreunix.Adder.addFile to be exported to get access to dags while
@@ -54,7 +54,7 @@ func NewFilestore(config ...Option) (*Filestore, error) {
 		}, nil
 	}
 
-	if err := cfg.InitRepo(); err != nil {
+	if err := cfg.InitRepo(cfg.Ctx); err != nil {
 		return nil, err
 	}
 
@@ -78,10 +78,11 @@ func (fst *Filestore) Online() bool {
 	return fst.node.OnlineMode()
 }
 
-func (fst *Filestore) GoOnline() error {
+func (fst *Filestore) GoOnline(ctx context.Context) error {
+	log.Debug("going online")
 	cfg := fst.cfg
 	cfg.BuildCfg.Online = true
-	node, err := core.NewNode(cfg.Ctx, &cfg.BuildCfg)
+	node, err := core.NewNode(ctx, &cfg.BuildCfg)
 	if err != nil {
 		return fmt.Errorf("error creating ipfs node: %s\n", err.Error())
 	}
