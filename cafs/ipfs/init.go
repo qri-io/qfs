@@ -10,11 +10,11 @@ import (
 	"os"
 	"path"
 
-	config "gx/ipfs/QmPEpj17FDRpc7K1aArKZp3RsHtzRMKykeK9GVgn4WQGPR/go-ipfs-config"
-	assets "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/assets"
-	core "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/core"
-	namesys "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/namesys"
-	fsrepo "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/repo/fsrepo"
+	config "github.com/ipfs/go-ipfs-config"
+	assets "github.com/ipfs/go-ipfs/assets"
+	core "github.com/ipfs/go-ipfs/core"
+	namesys "github.com/ipfs/go-ipfs/namesys"
+	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
 )
 
 const (

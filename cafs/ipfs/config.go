@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/core"
-	fsrepo "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/repo/fsrepo"
+	"github.com/ipfs/go-ipfs/core"
+	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
 )
 
 var ErrIPFSRepoNeedsMigration = fmt.Errorf(`Your IPFS repo needs an update!

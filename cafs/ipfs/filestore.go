@@ -17,13 +17,13 @@ import (
 	// Qri to writing IPLD. Lots to think about.
 	coreunix "github.com/qri-io/qfs/cafs/ipfs/coreunix"
 
-	path "gx/ipfs/QmT3rzed1ppXefourpmoZ7tyVQfsGPQZ1pHDngLmCvXxd3/go-path"
-	core "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/core"
-	coreapi "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/core/coreapi"
-	coreiface "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/core/coreapi/interface"
-	corerepo "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/core/corerepo"
-	files "gx/ipfs/QmZMWMvWMVKCbHetJ4RgndbuEF1io2UpUxwQwtNjtYPzSC/go-ipfs-files"
-	ipfsds "gx/ipfs/QmaRb5yNXKonhbkpNxNawoydk4N6es6b4fPj19sjEKsh5D/go-datastore"
+	ipfsds "github.com/ipfs/go-datastore"
+	files "github.com/ipfs/go-ipfs-files"
+	core "github.com/ipfs/go-ipfs/core"
+	coreapi "github.com/ipfs/go-ipfs/core/coreapi"
+	corerepo "github.com/ipfs/go-ipfs/core/corerepo"
+	path "github.com/ipfs/go-path"
+	coreiface "github.com/ipfs/interface-go-ipfs-core"
 )
 
 var log = logging.Logger("cafs/ipfs")

@@ -4,29 +4,27 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	gopath "path"
-	"path/filepath"
 	"strconv"
 
-	core "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/core"
-	coreiface "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/core/coreapi/interface"
-	"gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/pin"
+	core "github.com/ipfs/go-ipfs/core"
+	"github.com/ipfs/go-ipfs/pin"
+	coreiface "github.com/ipfs/interface-go-ipfs-core"
 
-	cid "gx/ipfs/QmPSQnBKM9g7BaUcZCvswUJVscQ1ipjmwxN5PXCjkp9EQ7/go-cid"
-	posinfo "gx/ipfs/QmQyUyYcpKG1u53V7N25qRTGw5XwaAxTMKXbduqHotQztg/go-ipfs-posinfo"
-	ipld "gx/ipfs/QmR7TcHkR9nxkUorfi8XMTAMLUK7GiP64TWWBzY3aacc1o/go-ipld-format"
-	dag "gx/ipfs/QmSei8kFMfqdJq7Q68d2LMnHbTWKKg2daA29ezUYFAUNgc/go-merkledag"
-	chunker "gx/ipfs/QmTUTG9Jg9ZRA1EzTPGTDvnwfcfKhDMnqANnP9fe4rSjMR/go-ipfs-chunker"
-	mfs "gx/ipfs/QmUwXQs8aZ472DmXZ8uJNf7HJNKoMJQVa7RaCz7ujZ3ua9/go-mfs"
-	logging "gx/ipfs/QmZChCsSt8DctjceaL56Eibc29CVQq4dGKRXC5JRZ6Ppae/go-log"
-	files "gx/ipfs/QmZMWMvWMVKCbHetJ4RgndbuEF1io2UpUxwQwtNjtYPzSC/go-ipfs-files"
-	bstore "gx/ipfs/QmcDDgAXDbpDUpadCJKLr49KYR4HuL7T8Z1dZTHt6ixsoR/go-ipfs-blockstore"
-	unixfs "gx/ipfs/QmfB3oNXGGq9S4B2a9YeCajoATms3Zw2VvDm8fK7VeLSV8/go-unixfs"
-	balanced "gx/ipfs/QmfB3oNXGGq9S4B2a9YeCajoATms3Zw2VvDm8fK7VeLSV8/go-unixfs/importer/balanced"
-	ihelper "gx/ipfs/QmfB3oNXGGq9S4B2a9YeCajoATms3Zw2VvDm8fK7VeLSV8/go-unixfs/importer/helpers"
-	trickle "gx/ipfs/QmfB3oNXGGq9S4B2a9YeCajoATms3Zw2VvDm8fK7VeLSV8/go-unixfs/importer/trickle"
+	cid "github.com/ipfs/go-cid"
+	bstore "github.com/ipfs/go-ipfs-blockstore"
+	chunker "github.com/ipfs/go-ipfs-chunker"
+	files "github.com/ipfs/go-ipfs-files"
+	posinfo "github.com/ipfs/go-ipfs-posinfo"
+	ipld "github.com/ipfs/go-ipld-format"
+	logging "github.com/ipfs/go-log"
+	dag "github.com/ipfs/go-merkledag"
+	mfs "github.com/ipfs/go-mfs"
+	unixfs "github.com/ipfs/go-unixfs"
+	balanced "github.com/ipfs/go-unixfs/importer/balanced"
+	ihelper "github.com/ipfs/go-unixfs/importer/helpers"
+	trickle "github.com/ipfs/go-unixfs/importer/trickle"
 )
 
 var log = logging.Logger("coreunix")
@@ -129,11 +127,16 @@ func (adder *Adder) add(reader io.Reader) (ipld.Node, error) {
 		CidBuilder: adder.CidBuilder,
 	}
 
-	if adder.Trickle {
-		return trickle.Layout(params.New(chnk))
+	dagBuilderHelper, err := params.New(chnk)
+	if err != nil {
+		return nil, err
 	}
 
-	return balanced.Layout(params.New(chnk))
+	if adder.Trickle {
+		return trickle.Layout(dagBuilderHelper)
+	}
+
+	return balanced.Layout(dagBuilderHelper)
 }
 
 // RootNode returns the root node of the Added.
@@ -311,7 +314,7 @@ func AddR(n *core.IpfsNode, root string) (key string, err error) {
 		return "", err
 	}
 
-	f, err := files.NewSerialFile(filepath.Base(root), root, false, stat)
+	f, err := files.NewSerialFile(root, false, stat)
 	if err != nil {
 		return "", err
 	}
@@ -340,7 +343,7 @@ func AddR(n *core.IpfsNode, root string) (key string, err error) {
 // Returns the path of the added file ("<dir hash>/filename"), the DAG node of
 // the directory, and and error if any.
 func AddWrapped(n *core.IpfsNode, r io.Reader, filename string) (string, ipld.Node, error) {
-	file := files.NewReaderFile(filename, filename, ioutil.NopCloser(r), nil)
+	file := files.NewReaderFile(r)
 	fileAdder, err := NewAdder(n.Context(), n.Pinning, n.Blockstore, n.DAG)
 	if err != nil {
 		return "", nil, err
