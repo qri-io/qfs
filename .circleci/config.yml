@@ -3,48 +3,32 @@ jobs:
   build:
     working_directory: /go/src/github.com/qri-io/qfs
     docker:
-      - image: circleci/golang:1.11
+      - image: circleci/golang:1.12
         environment:
           GOLANG_ENV: test
+          GO111MODULE: "on"
     environment:
       TEST_RESULTS: /tmp/test-results
     steps:
       - checkout
       - run: mkdir -p $TEST_RESULTS
+      - restore_cache:
+          key: dependency-cache-{{ checksum "go.sum" }}
       - run: 
           name: Install test deps
           command: >
-            go get -v
+            go get -v 
             github.com/jstemmer/go-junit-report 
-            github.com/golang/lint/golint
-            github.com/whyrusleeping/gx 
-            github.com/whyrusleeping/gx-go 
-      - run:
-          name: Install non-gx deps
-          command: >
-            go get -t -d -v 
-            github.com/ipfs/go-datastore
-            github.com/jbenet/goprocess
-            github.com/satori/go.uuid
-            github.com/jbenet/go-base58
-            github.com/multiformats/go-multihash
-            github.com/spaolacci/murmur3
-            golang.org/x/crypto/blake2b
-            github.com/ipfs/go-log
-      - restore_cache:
-          key: dependency-cache-{{ checksum "package.json" }}
-      - run:
-          name: Install gx deps
-          command: gx install
-      - save_cache:
-          key: dependency-cache-{{ checksum "package.json" }}
-          paths:
-            - /go/src/gx/
+            golang.org/x/lint/golint
       - run:
           name: Run Tests
           command: |
             trap "go-junit-report <${TEST_RESULTS}/go-test.out > ${TEST_RESULTS}/go-test-report.xml" EXIT
-            ./.circleci/cover.test.sh | tee ${TEST_RESULTS}/go-test.out
+            make test | tee ${TEST_RESULTS}/go-test.out
+      - save_cache:
+          key: dependency-cache-{{ checksum "go.sum" }}
+          paths:
+            - /go/pkg/mod
       - run:
           name: Publish coverage info to codecov.io
           command: bash <(curl -s https://codecov.io/bash)
