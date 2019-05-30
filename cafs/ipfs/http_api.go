@@ -45,7 +45,8 @@ func (fs *Filestore) serveAPI() error {
 // extracted from github.com/ipfs/go-ipfs/cmd/ipfswatch/main.go
 func cmdCtx(node *ipfs_core.IpfsNode, repoPath string) ipfs_commands.Context {
 	return ipfs_commands.Context{
-		Online:     true,
+		// Online:     true,
+
 		ConfigRoot: repoPath,
 		ReqLog:     &ipfs_commands.ReqLog{},
 		LoadConfig: func(path string) (*ipfs_config.Config, error) {

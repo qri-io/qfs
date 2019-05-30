@@ -9,12 +9,15 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
+	"sync"
 
 	config "github.com/ipfs/go-ipfs-config"
-	assets "github.com/ipfs/go-ipfs/assets"
-	core "github.com/ipfs/go-ipfs/core"
-	namesys "github.com/ipfs/go-ipfs/namesys"
-	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
+	"github.com/ipfs/go-ipfs/assets"
+	"github.com/ipfs/go-ipfs/core"
+	"github.com/ipfs/go-ipfs/namesys"
+	"github.com/ipfs/go-ipfs/plugin/loader"
+	"github.com/ipfs/go-ipfs/repo/fsrepo"
 )
 
 const (
@@ -88,6 +91,10 @@ func doInit(out io.Writer, repoRoot string, empty bool, nBitsForKeypair int, con
 		}
 	}
 
+	if _, err := loadPluginsOnce(repoRoot); err != nil {
+		return err
+	}
+
 	if err := fsrepo.Init(repoRoot, conf); err != nil {
 		return err
 	}
@@ -158,6 +165,29 @@ func addDefaultAssets(out io.Writer, repoRoot string) error {
 	return err
 }
 
+// func initializeIpnsKeyspace(repoRoot string) error {
+// 	ctx, cancel := context.WithCancel(context.Background())
+// 	defer cancel()
+
+// 	r, err := fsrepo.Open(repoRoot)
+// 	if err != nil { // NB: repo is owned by the node
+// 		return err
+// 	}
+
+// 	nd, err := core.NewNode(ctx, &core.BuildCfg{Repo: r})
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer nd.Close()
+
+// 	// err = nd.SetupOfflineRouting()
+// 	// if err != nil {
+// 	// 	return err
+// 	// }
+
+// 	return namesys.InitializeKeyspace(ctx, nd.Namesys, nd.Pinning, nd.PrivateKey)
+// }
+
 func initializeIpnsKeyspace(repoRoot string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -173,10 +203,61 @@ func initializeIpnsKeyspace(repoRoot string) error {
 	}
 	defer nd.Close()
 
-	err = nd.SetupOfflineRouting()
+	return namesys.InitializeKeyspace(ctx, nd.Namesys, nd.Pinning, nd.PrivateKey)
+}
+
+var (
+	loadOnce       sync.Once
+	pluginLoader   *loader.PluginLoader
+	loadPluginsErr error
+)
+
+func loadPluginsOnce(repoPath string) (*loader.PluginLoader, error) {
+	do := func() {
+		pluginLoader, loadPluginsErr = loadPlugins(repoPath)
+	}
+	loadOnce.Do(do)
+	return pluginLoader, loadPluginsErr
+}
+
+func loadPlugins(repoPath string) (*loader.PluginLoader, error) {
+	// check if repo is accessible before loading plugins
+	pluginpath := filepath.Join(repoPath, "plugins")
+
+	var plugins *loader.PluginLoader
+	ok, err := checkPermissions(repoPath)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	if !ok {
+		pluginpath = ""
+	}
+	plugins, err = loader.NewPluginLoader(pluginpath)
+	if err != nil {
+		return nil, fmt.Errorf("error loading plugins: %s", err)
 	}
 
-	return namesys.InitializeKeyspace(ctx, nd.Namesys, nd.Pinning, nd.PrivateKey)
+	if err := plugins.Initialize(); err != nil {
+		return nil, fmt.Errorf("error initializing plugins: %s", err)
+	}
+
+	if err := plugins.Inject(); err != nil {
+		return nil, fmt.Errorf("error initializing plugins: %s", err)
+	}
+
+	return plugins, nil
+}
+
+func checkPermissions(path string) (bool, error) {
+	_, err := os.Open(path)
+	if os.IsNotExist(err) {
+		// repo does not exist yet - don't load plugins, but also don't fail
+		return false, nil
+	}
+	if os.IsPermission(err) {
+		// repo is not accessible. error out.
+		return false, fmt.Errorf("error opening repository at %s: permission denied", path)
+	}
+
+	return true, nil
 }
