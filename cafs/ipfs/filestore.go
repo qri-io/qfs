@@ -61,10 +61,6 @@ func NewFilestore(config ...Option) (*Filestore, error) {
 		return nil, err
 	}
 
-	if _, err := loadPluginsOnce(cfg.FsRepoPath); err != nil {
-		return nil, err
-	}
-
 	node, err := core.NewNode(cfg.Ctx, &cfg.BuildCfg)
 	if err != nil {
 		return nil, fmt.Errorf("error creating ipfs node: %s", err.Error())

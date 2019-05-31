@@ -7,12 +7,20 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/qri-io/qfs"
 	"github.com/qri-io/qfs/cafs"
 	"github.com/qri-io/qfs/cafs/test"
-	"github.com/qri-io/qfs"
 )
 
 var _ cafs.Fetcher = (*Filestore)(nil)
+
+func init() {
+	// call LoadPlugins once with the empty string b/c we only rely on standard
+	// plugins
+	if err := LoadPlugins(""); err != nil {
+		panic(err)
+	}
+}
 
 func TestFilestore(t *testing.T) {
 	path := filepath.Join(os.TempDir(), "ipfs_cafs_test")

@@ -10,7 +10,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sync"
 
 	config "github.com/ipfs/go-ipfs-config"
 	"github.com/ipfs/go-ipfs/assets"
@@ -89,10 +88,6 @@ func doInit(out io.Writer, repoRoot string, empty bool, nBitsForKeypair int, con
 		if err := profile.Transform(conf); err != nil {
 			return err
 		}
-	}
-
-	if _, err := loadPluginsOnce(repoRoot); err != nil {
-		return err
 	}
 
 	if err := fsrepo.Init(repoRoot, conf); err != nil {
@@ -206,46 +201,35 @@ func initializeIpnsKeyspace(repoRoot string) error {
 	return namesys.InitializeKeyspace(ctx, nd.Namesys, nd.Pinning, nd.PrivateKey)
 }
 
-var (
-	loadOnce       sync.Once
-	pluginLoader   *loader.PluginLoader
-	loadPluginsErr error
-)
-
-func loadPluginsOnce(repoPath string) (*loader.PluginLoader, error) {
-	do := func() {
-		pluginLoader, loadPluginsErr = loadPlugins(repoPath)
-	}
-	loadOnce.Do(do)
-	return pluginLoader, loadPluginsErr
-}
-
-func loadPlugins(repoPath string) (*loader.PluginLoader, error) {
+// LoadPlugins loads & injects plugins from a given repo path. This needs to be
+// called once per active process with a repo
+// NB: this implies that changing repo locations requires a process restart
+func LoadPlugins(repoPath string) error {
 	// check if repo is accessible before loading plugins
 	pluginpath := filepath.Join(repoPath, "plugins")
 
 	var plugins *loader.PluginLoader
 	ok, err := checkPermissions(repoPath)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if !ok {
 		pluginpath = ""
 	}
 	plugins, err = loader.NewPluginLoader(pluginpath)
 	if err != nil {
-		return nil, fmt.Errorf("error loading plugins: %s", err)
+		return fmt.Errorf("error loading plugins: %s", err)
 	}
 
 	if err := plugins.Initialize(); err != nil {
-		return nil, fmt.Errorf("error initializing plugins: %s", err)
+		return fmt.Errorf("error initializing plugins: %s", err)
 	}
 
 	if err := plugins.Inject(); err != nil {
-		return nil, fmt.Errorf("error initializing plugins: %s", err)
+		return fmt.Errorf("error initializing plugins: %s", err)
 	}
 
-	return plugins, nil
+	return nil
 }
 
 func checkPermissions(path string) (bool, error) {
