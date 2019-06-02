@@ -1,10 +1,14 @@
 package coreunix
 
 import (
+	// cid "gx/ipfs/QmPSQnBKM9g7BaUcZCvswUJVscQ1ipjmwxN5PXCjkp9EQ7/go-cid"
 	cid "github.com/ipfs/go-cid"
-	core "github.com/ipfs/go-ipfs/core"
+	// dag "gx/ipfs/QmSei8kFMfqdJq7Q68d2LMnHbTWKKg2daA29ezUYFAUNgc/go-merkledag"
 	dag "github.com/ipfs/go-merkledag"
+	// ft "gx/ipfs/QmfB3oNXGGq9S4B2a9YeCajoATms3Zw2VvDm8fK7VeLSV8/go-unixfs"
 	ft "github.com/ipfs/go-unixfs"
+
+	core "github.com/ipfs/go-ipfs/core"
 )
 
 func AddMetadataTo(n *core.IpfsNode, skey string, m *ft.Metadata) (string, error) {
