@@ -5,10 +5,6 @@ import (
 	"fmt"
 	"io"
 
-	logging "github.com/ipfs/go-log"
-	"github.com/qri-io/qfs"
-	cafs "github.com/qri-io/qfs/cafs"
-
 	// Note coreunix is forked form github.com/ipfs/go-ipfs/core/coreunix
 	// we need coreunix.Adder.addFile to be exported to get access to dags while
 	// they're being created. We should be able to remove this with refactoring &
@@ -17,13 +13,15 @@ import (
 	// Qri to writing IPLD. Lots to think about.
 	coreunix "github.com/qri-io/qfs/cafs/ipfs/coreunix"
 
-	path "gx/ipfs/QmT3rzed1ppXefourpmoZ7tyVQfsGPQZ1pHDngLmCvXxd3/go-path"
-	core "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/core"
-	coreapi "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/core/coreapi"
-	coreiface "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/core/coreapi/interface"
-	corerepo "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/core/corerepo"
-	files "gx/ipfs/QmZMWMvWMVKCbHetJ4RgndbuEF1io2UpUxwQwtNjtYPzSC/go-ipfs-files"
-	ipfsds "gx/ipfs/QmaRb5yNXKonhbkpNxNawoydk4N6es6b4fPj19sjEKsh5D/go-datastore"
+	core "github.com/ipfs/go-ipfs/core"
+	coreapi "github.com/ipfs/go-ipfs/core/coreapi"
+	logging "github.com/ipfs/go-log"
+	putil "github.com/ipfs/go-path"
+	coreiface "github.com/ipfs/interface-go-ipfs-core"
+	"github.com/ipfs/interface-go-ipfs-core/path"
+	"github.com/qri-io/qfs"
+	cafs "github.com/qri-io/qfs/cafs"
+	files "github.com/qri-io/qfs/cafs/ipfs/go-ipfs-files"
 )
 
 var log = logging.Logger("cafs/ipfs")
@@ -47,10 +45,15 @@ func NewFilestore(config ...Option) (*Filestore, error) {
 	}
 
 	if cfg.Node != nil {
+		capi, err := coreapi.NewCoreAPI(cfg.Node)
+		if err != nil {
+			return nil, err
+		}
+
 		return &Filestore{
 			cfg:  cfg,
 			node: cfg.Node,
-			capi: coreapi.NewCoreAPI(cfg.Node),
+			capi: capi,
 		}, nil
 	}
 
@@ -60,13 +63,18 @@ func NewFilestore(config ...Option) (*Filestore, error) {
 
 	node, err := core.NewNode(cfg.Ctx, &cfg.BuildCfg)
 	if err != nil {
-		return nil, fmt.Errorf("error creating ipfs node: %s\n", err.Error())
+		return nil, fmt.Errorf("error creating ipfs node: %s", err.Error())
+	}
+
+	capi, err := coreapi.NewCoreAPI(node)
+	if err != nil {
+		return nil, err
 	}
 
 	return &Filestore{
 		cfg:  cfg,
 		node: node,
-		capi: coreapi.NewCoreAPI(node),
+		capi: capi,
 	}, nil
 }
 
@@ -75,7 +83,7 @@ func (fst *Filestore) Node() *core.IpfsNode {
 }
 
 func (fst *Filestore) Online() bool {
-	return fst.node.OnlineMode()
+	return fst.node.IsOnline
 }
 
 func (fst *Filestore) GoOnline(ctx context.Context) error {
@@ -87,10 +95,15 @@ func (fst *Filestore) GoOnline(ctx context.Context) error {
 		return fmt.Errorf("error creating ipfs node: %s\n", err.Error())
 	}
 
+	capi, err := coreapi.NewCoreAPI(node)
+	if err != nil {
+		return err
+	}
+
 	*fst = Filestore{
 		cfg:  cfg,
 		node: node,
-		capi: coreapi.NewCoreAPI(node),
+		capi: capi,
 	}
 
 	if cfg.EnableAPI {
@@ -105,10 +118,9 @@ func (fst *Filestore) GoOnline(ctx context.Context) error {
 }
 
 func (fst *Filestore) Has(key string) (exists bool, err error) {
-	ipfskey := ipfsds.NewKey(key)
 
-	if _, err = core.Resolve(fst.node.Context(), fst.node.Namesys, fst.node.Resolver, path.Path(ipfskey.String())); err != nil {
-		// TODO - return error here?
+	// TODO (b5) - we should be scrutinizing the error that's returned here:
+	if _, err = fst.node.Resolver.ResolvePath(fst.node.Context(), putil.Path(key)); err != nil {
 		return false, nil
 	}
 
@@ -143,15 +155,20 @@ func (fst *Filestore) Delete(key string) error {
 }
 
 func (fst *Filestore) getKey(key string) (qfs.File, error) {
-	path, err := coreiface.ParsePath(key)
+	node, err := fst.capi.Unixfs().Get(fst.node.Context(), path.New(key))
 	if err != nil {
 		return nil, err
 	}
-	file, err := fst.capi.Unixfs().Get(fst.node.Context(), path)
-	if err != nil {
-		return nil, err
+
+	if rdr, ok := node.(io.Reader); ok {
+		return qfs.NewMemfileReader(key, rdr), nil
 	}
-	return qfs.NewMemfileReader(file.FileName(), file), nil
+
+	// if _, isDir := node.(files.Directory); isDir {
+	// 	return nil, fmt.Errorf("filestore doesn't support getting directories")
+	// }
+
+	return nil, fmt.Errorf("path is neither a file nor a directory")
 }
 
 // Adder wraps a coreunix adder to conform to the cafs adder interface
@@ -159,21 +176,46 @@ type Adder struct {
 	adder *coreunix.Adder
 	out   chan interface{}
 	added chan cafs.AddedFile
+	wrap  bool
+	pin   bool
 }
 
 func (a *Adder) AddFile(f qfs.File) error {
 	return a.adder.AddFile(wrapFile{f})
 }
+
 func (a *Adder) Added() chan cafs.AddedFile {
 	return a.added
 }
 
 func (a *Adder) Close() error {
 	defer close(a.out)
+	// node, err := a.adder.CurRootNode()
+	// if err != nil {
+	// 	return err
+	// }
+	// if a.wrap {
+	// 	// rootDir := files.NewSliceDirectory([]files.DirEntry{
+	// 	// 	files.FileEntry("", files.ToFile(node)),
+	// 	// })
+	// 	// if err := a.adder.AddDir("", rootDir, true); err != nil {
+	// 	// 	return err
+	// 	// }
+	// 	node, err = a.adder.RootDirectory()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
+
 	if _, err := a.adder.Finalize(); err != nil {
 		return err
 	}
-	return a.adder.PinRoot()
+
+	if a.pin {
+		return a.adder.PinRoot()
+	}
+
+	return nil
 }
 
 func (fst *Filestore) NewAdder(pin, wrap bool) (cafs.Adder, error) {
@@ -196,12 +238,11 @@ func (fst *Filestore) NewAdder(pin, wrap bool) (cafs.Adder, error) {
 			select {
 			case out, ok := <-outChan:
 				if ok {
-					output := out.(*coreiface.AddEvent)
-					if len(output.Hash) > 0 {
+					output := out.(*coreunix.AddEvent)
+					if output.Hash != "" {
 						added <- cafs.AddedFile{
 							Path:  pathFromHash(output.Hash),
 							Name:  output.Name,
-							Hash:  output.Hash,
 							Bytes: output.Bytes,
 							Size:  output.Size,
 						}
@@ -221,6 +262,8 @@ func (fst *Filestore) NewAdder(pin, wrap bool) (cafs.Adder, error) {
 		adder: a,
 		out:   outChan,
 		added: added,
+		wrap:  wrap,
+		pin:   pin,
 	}, nil
 }
 
@@ -235,7 +278,7 @@ func (fst *Filestore) AddFile(file qfs.File, pin bool) (hash string, err error) 
 
 	fileAdder, err := coreunix.NewAdder(ctx, node.Pinning, node.Blockstore, node.DAG)
 	fileAdder.Pin = pin
-	fileAdder.Wrap = file.IsDirectory()
+	// fileAdder.Wrap = file.IsDirectory()
 	if err != nil {
 		err = fmt.Errorf("error allocating adder: %s", err.Error())
 		return
@@ -271,10 +314,16 @@ func (fst *Filestore) AddFile(file qfs.File, pin bool) (hash string, err error) 
 			errChan <- fmt.Errorf("error finalizing file adder: %s", err.Error())
 			return
 		}
-		if err = fileAdder.PinRoot(); err != nil {
-			errChan <- fmt.Errorf("error pinning file root: %s", err.Error())
-			return
-		}
+		errChan <- nil
+		// node, err := fileAdder.CurRootNode()
+		// if err != nil {
+		// 	errChan <- fmt.Errorf("error finding root node: %s", err.Error())
+		// 	return
+		// }
+		// if err = fileAdder.PinRoot(); err != nil {
+		// 	errChan <- fmt.Errorf("error pinning file root: %s", err.Error())
+		// 	return
+		// }
 		// errChan <- nil
 	}()
 
@@ -284,7 +333,7 @@ func (fst *Filestore) AddFile(file qfs.File, pin bool) (hash string, err error) 
 			if !ok {
 				return
 			}
-			output := out.(*coreiface.AddEvent)
+			output := out.(*coreunix.AddEvent)
 			if len(output.Hash) > 0 {
 				hash = output.Hash
 				// return
@@ -299,14 +348,12 @@ func (fst *Filestore) AddFile(file qfs.File, pin bool) (hash string, err error) 
 	return
 }
 
-func (fst *Filestore) Pin(path string, recursive bool) error {
-	_, err := corerepo.Pin(fst.node, fst.capi, fst.node.Context(), []string{path}, recursive)
-	return err
+func (fst *Filestore) Pin(cid string, recursive bool) error {
+	return fst.capi.Pin().Add(context.Background(), path.New(cid))
 }
 
-func (fst *Filestore) Unpin(path string, recursive bool) error {
-	_, err := corerepo.Unpin(fst.node, fst.capi, fst.node.Context(), []string{path}, recursive)
-	return err
+func (fst *Filestore) Unpin(cid string, recursive bool) error {
+	return fst.capi.Pin().Rm(context.Background(), path.New(cid))
 }
 
 type wrapFile struct {
@@ -319,4 +366,12 @@ func (w wrapFile) NextFile() (files.File, error) {
 		return nil, err
 	}
 	return wrapFile{next}, nil
+}
+
+func (w wrapFile) Seek(offset int64, whence int) (int64, error) {
+	return 0, fmt.Errorf("wrapFile doesn't support seeking")
+}
+
+func (w wrapFile) Size() (int64, error) {
+	return 0, fmt.Errorf("wrapFile doesn't support Size")
 }

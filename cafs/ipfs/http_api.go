@@ -3,10 +3,10 @@ package ipfs_filestore
 import (
 	"fmt"
 
-	ipfs_config "gx/ipfs/QmPEpj17FDRpc7K1aArKZp3RsHtzRMKykeK9GVgn4WQGPR/go-ipfs-config"
-	ipfs_commands "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/commands"
-	ipfs_core "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/core"
-	ipfs_corehttp "gx/ipfs/QmUJYo4etAQqFfSS2rarFAE97eNGB8ej64YkRT2SmsYD4r/go-ipfs/core/corehttp"
+	ipfs_config "github.com/ipfs/go-ipfs-config"
+	ipfs_commands "github.com/ipfs/go-ipfs/commands"
+	ipfs_core "github.com/ipfs/go-ipfs/core"
+	ipfs_corehttp "github.com/ipfs/go-ipfs/core/corehttp"
 )
 
 // serveAPI makes an IPFS node available over an HTTP api
@@ -45,7 +45,8 @@ func (fs *Filestore) serveAPI() error {
 // extracted from github.com/ipfs/go-ipfs/cmd/ipfswatch/main.go
 func cmdCtx(node *ipfs_core.IpfsNode, repoPath string) ipfs_commands.Context {
 	return ipfs_commands.Context{
-		Online:     true,
+		// Online:     true,
+
 		ConfigRoot: repoPath,
 		ReqLog:     &ipfs_commands.ReqLog{},
 		LoadConfig: func(path string) (*ipfs_config.Config, error) {

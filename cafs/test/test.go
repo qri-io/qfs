@@ -6,8 +6,8 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/qri-io/qfs/cafs"
 	"github.com/qri-io/qfs"
+	"github.com/qri-io/qfs/cafs"
 )
 
 func EnsureFilestoreBehavior(f cafs.Filestore) error {
@@ -54,7 +54,6 @@ func EnsureFilestoreSingleFileBehavior(f cafs.Filestore) error {
 		return fmt.Errorf("filestore claims to have a very silly key")
 	}
 
-	// TODO - need to restore this, currently it'll make ipfs filestore tests fail
 	has, err = f.Has(key)
 	if err != nil {
 		return fmt.Errorf("Filestore.Has(%s) error: %s", key, err.Error())
