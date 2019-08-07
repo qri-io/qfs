@@ -7,7 +7,7 @@ require (
 	github.com/ipfs/go-blockservice v0.0.3
 	github.com/ipfs/go-cid v0.0.2
 	github.com/ipfs/go-datastore v0.0.5
-	github.com/ipfs/go-ipfs v0.4.21
+	github.com/ipfs/go-ipfs v0.4.22-rc1
 	github.com/ipfs/go-ipfs-blockstore v0.0.1
 	github.com/ipfs/go-ipfs-chunker v0.0.1
 	github.com/ipfs/go-ipfs-config v0.0.3
