@@ -78,8 +78,16 @@ func NewFilestore(config ...Option) (*Filestore, error) {
 	}, nil
 }
 
+// Node exposes the internal ipfs node
+//
+// Deprecated: use IPFSCoreAPI instead
 func (fst *Filestore) Node() *core.IpfsNode {
 	return fst.node
+}
+
+// IPFSCoreAPI exposes the Filestore's CoreAPI interface
+func (fst *Filestore) IPFSCoreAPI() coreiface.CoreAPI {
+	return fst.capi
 }
 
 func (fst *Filestore) Online() bool {

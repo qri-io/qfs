@@ -14,7 +14,6 @@ import (
 	"github.com/ipfs/go-ipfs/pin/gc"
 	"github.com/ipfs/go-ipfs/repo"
 
-	// config "gx/ipfs/QmPEpj17FDRpc7K1aArKZp3RsHtzRMKykeK9GVgn4WQGPR/go-ipfs-config"
 	config "github.com/ipfs/go-ipfs-config"
 	cid "github.com/ipfs/go-cid"
 	pi "github.com/ipfs/go-ipfs-posinfo"

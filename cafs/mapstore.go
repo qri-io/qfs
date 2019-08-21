@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/jbenet/go-base58"
+	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-multihash"
 	"github.com/qri-io/qfs"
 )
