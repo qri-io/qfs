@@ -14,17 +14,16 @@ import (
 	"github.com/ipfs/go-ipfs/pin/gc"
 	"github.com/ipfs/go-ipfs/repo"
 
-	// config "gx/ipfs/QmPEpj17FDRpc7K1aArKZp3RsHtzRMKykeK9GVgn4WQGPR/go-ipfs-config"
-	config "github.com/ipfs/go-ipfs-config"
-	cid "github.com/ipfs/go-cid"
-	pi "github.com/ipfs/go-ipfs-posinfo"
 	blocks "github.com/ipfs/go-block-format"
-	dag "github.com/ipfs/go-merkledag"
 	"github.com/ipfs/go-blockservice"
-	files "github.com/qri-io/qfs/cafs/ipfs/go-ipfs-files"
+	cid "github.com/ipfs/go-cid"
 	datastore "github.com/ipfs/go-datastore"
 	syncds "github.com/ipfs/go-datastore/sync"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
+	config "github.com/ipfs/go-ipfs-config"
+	pi "github.com/ipfs/go-ipfs-posinfo"
+	dag "github.com/ipfs/go-merkledag"
+	files "github.com/qri-io/qfs/cafs/ipfs/go-ipfs-files"
 )
 
 const testPeerID = "QmTFauExutTsy4XP6JbMFcw2Wa9645HJt2bTqL6qYDCKfe"
@@ -273,4 +272,4 @@ func (fi *dummyFileInfo) Size() int64        { return fi.size }
 func (fi *dummyFileInfo) Mode() os.FileMode  { return 0 }
 func (fi *dummyFileInfo) ModTime() time.Time { return fi.modTime }
 func (fi *dummyFileInfo) IsDir() bool        { return false }
-func (fi *dummyFileInfo) Sys() interface{} { return nil }
+func (fi *dummyFileInfo) Sys() interface{}   { return nil }
