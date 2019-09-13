@@ -1,5 +1,7 @@
 package qfs
 
+import "context"
+
 // NewMemFS creates an in-memory filesystem from a set of files
 func NewMemFS(store Filesystem) *MemFS {
 	return &MemFS{
@@ -15,6 +17,6 @@ type MemFS struct {
 }
 
 // Get implements PathResolver interface
-func (mfs *MemFS) Get(path string) (File, error) {
-	return mfs.store.Get(path)
+func (mfs *MemFS) Get(ctx context.Context, path string) (File, error) {
+	return mfs.store.Get(ctx, path)
 }

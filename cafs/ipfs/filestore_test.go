@@ -1,6 +1,7 @@
 package ipfs_filestore
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"os"
@@ -51,6 +52,7 @@ func TestFilestore(t *testing.T) {
 }
 
 func BenchmarkRead(b *testing.B) {
+	ctx := context.Background()
 	path := filepath.Join(os.TempDir(), "ipfs_cafs_benchmark_read")
 
 	if _, err := os.Open(filepath.Join(path, "config")); os.IsNotExist(err) {
@@ -83,7 +85,7 @@ func BenchmarkRead(b *testing.B) {
 		return
 	}
 
-	key, err := f.Put(qfs.NewMemfileBytes(filepath.Base(egFilePath), data), true)
+	key, err := f.Put(ctx, qfs.NewMemfileBytes(filepath.Base(egFilePath), data), true)
 	if err != nil {
 		b.Errorf("error putting example file in store: %s", err.Error())
 		return
@@ -91,7 +93,7 @@ func BenchmarkRead(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		gotf, err := f.Get(key)
+		gotf, err := f.Get(ctx, key)
 		if err != nil {
 			b.Errorf("iteration %d error getting key: %s", i, err.Error())
 			break

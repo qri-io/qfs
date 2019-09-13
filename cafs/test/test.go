@@ -2,6 +2,7 @@ package test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -21,9 +22,10 @@ func EnsureFilestoreBehavior(f cafs.Filestore) error {
 }
 
 func EnsureFilestoreSingleFileBehavior(f cafs.Filestore) error {
+	ctx := context.Background()
 	fdata := []byte("foo")
 	file := qfs.NewMemfileBytes("file.txt", fdata)
-	key, err := f.Put(file, false)
+	key, err := f.Put(ctx, file, false)
 	if err != nil {
 		return fmt.Errorf("Filestore.Put(%s) error: %s", file.FileName(), err.Error())
 	}
@@ -33,7 +35,7 @@ func EnsureFilestoreSingleFileBehavior(f cafs.Filestore) error {
 		return fmt.Errorf("key returned didn't return a that matches this Filestore's PathPrefix. Expected: %s/..., got: %s", pre, key)
 	}
 
-	outf, err := f.Get(key)
+	outf, err := f.Get(ctx, key)
 	if err != nil {
 		return fmt.Errorf("Filestore.Get(%s) error: %s", key, err.Error())
 	}
@@ -46,7 +48,7 @@ func EnsureFilestoreSingleFileBehavior(f cafs.Filestore) error {
 		// return fmt.Errorf("mismatched return value from get: %s != %s", outf.FileName(), string(data))
 	}
 
-	has, err := f.Has("no-match")
+	has, err := f.Has(ctx, "no-match")
 	if err != nil {
 		return fmt.Errorf("Filestore.Has([nonexistent key]) error: %s", err.Error())
 	}
@@ -54,14 +56,14 @@ func EnsureFilestoreSingleFileBehavior(f cafs.Filestore) error {
 		return fmt.Errorf("filestore claims to have a very silly key")
 	}
 
-	has, err = f.Has(key)
+	has, err = f.Has(ctx, key)
 	if err != nil {
 		return fmt.Errorf("Filestore.Has(%s) error: %s", key, err.Error())
 	}
 	if !has {
 		return fmt.Errorf("Filestore.Has(%s) should have returned true", key)
 	}
-	if err = f.Delete(key); err != nil {
+	if err = f.Delete(ctx, key); err != nil {
 		return fmt.Errorf("Filestore.Delete(%s) error: %s", key, err.Error())
 	}
 
@@ -69,6 +71,8 @@ func EnsureFilestoreSingleFileBehavior(f cafs.Filestore) error {
 }
 
 func EnsureDirectoryBehavior(f cafs.Filestore) error {
+	ctx := context.Background()
+
 	file := qfs.NewMemdir("/a",
 		qfs.NewMemfileBytes("b.txt", []byte("a")),
 		qfs.NewMemdir("c",
@@ -76,12 +80,12 @@ func EnsureDirectoryBehavior(f cafs.Filestore) error {
 		),
 		qfs.NewMemfileBytes("e.txt", []byte("e")),
 	)
-	key, err := f.Put(file, false)
+	key, err := f.Put(ctx, file, false)
 	if err != nil {
 		return fmt.Errorf("Filestore.Put(%s) error: %s", file.FileName(), err.Error())
 	}
 
-	outf, err := f.Get(key)
+	outf, err := f.Get(ctx, key)
 	if err != nil {
 		return fmt.Errorf("Filestore.Get(%s) error: %s", key, err.Error())
 	}
@@ -110,7 +114,7 @@ func EnsureDirectoryBehavior(f cafs.Filestore) error {
 		}
 	}
 
-	if err = f.Delete(key); err != nil {
+	if err = f.Delete(ctx, key); err != nil {
 		return fmt.Errorf("Filestore.Delete(%s) error: %s", key, err.Error())
 	}
 
@@ -118,13 +122,15 @@ func EnsureDirectoryBehavior(f cafs.Filestore) error {
 }
 
 func EnsureFilestoreAdderBehavior(f cafs.Filestore) error {
+	ctx := context.Background()
+
 	adder, err := f.NewAdder(false, false)
 	if err != nil {
 		return fmt.Errorf("Filestore.NewAdder(false,false) error: %s", err.Error())
 	}
 
 	data := []byte("bar")
-	if err := adder.AddFile(qfs.NewMemfileBytes("test.txt", data)); err != nil {
+	if err := adder.AddFile(ctx, qfs.NewMemfileBytes("test.txt", data)); err != nil {
 		return fmt.Errorf("Adder.AddFile error: %s", err.Error())
 	}
 

@@ -1,6 +1,7 @@
 package muxfs
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/qri-io/qfs"
@@ -26,12 +27,12 @@ func (m *Mux) SetHandler(pathKind string, resolver qfs.PathResolver) {
 }
 
 // Get impoements the qfs.PathResolver interface
-func (m Mux) Get(path string) (qfs.File, error) {
+func (m Mux) Get(ctx context.Context, path string) (qfs.File, error) {
 	kind := qfs.PathKind(path)
 	handler, ok := m.handlers[kind]
 	if !ok {
 		return nil, fmt.Errorf("cannot resolve paths of kind '%s'. path: %s", kind, path)
 	}
 
-	return handler.Get(path)
+	return handler.Get(ctx, path)
 }

@@ -1,6 +1,7 @@
 package localfs
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -47,7 +48,7 @@ type FS struct {
 }
 
 // Get implements qfs.PathResolver
-func (lfs *FS) Get(path string) (qfs.File, error) {
+func (lfs *FS) Get(ctx context.Context, path string) (qfs.File, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {

@@ -1,6 +1,7 @@
 package httpfs
 
 import (
+	"context"
 	"net/http"
 	"path/filepath"
 
@@ -46,8 +47,13 @@ type FS struct {
 }
 
 // Get implements qfs.PathResolver
-func (httpfs *FS) Get(path string) (qfs.File, error) {
-	resp, err := httpfs.cfg.Client.Get(path)
+func (httpfs *FS) Get(ctx context.Context, path string) (qfs.File, error) {
+	req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	resp, err := httpfs.cfg.Client.Do(req)
 	if err != nil {
 		return nil, err
 	}

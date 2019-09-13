@@ -3,12 +3,14 @@ package qfs
 import (
 	"bytes"
 	"io/ioutil"
+	"context"
 	"testing"
 )
 
 func TestMemFS(t *testing.T) {
+	ctx := context.Background()
 	memfs := NewMemFS(testStore(0))
-	f, err := memfs.Get("path")
+	f, err := memfs.Get(ctx, "path")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +27,7 @@ func TestMemFS(t *testing.T) {
 
 type testStore int
 
-func (t testStore) Get(path string) (File, error) {
+func (t testStore) Get(ctx context.Context, path string) (File, error) {
 	if path == "path" {
 		return NewMemfileBytes("path", []byte(`data`)), nil
 	}

@@ -1,6 +1,7 @@
 package qfs
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,7 @@ var (
 // * content-addressed file systems like IPFS or Git
 // Datasets & dataset components use a filesource to resolve string references
 type PathResolver interface {
-	Get(path string) (File, error)
+	Get(ctx context.Context, path string) (File, error)
 }
 
 // Filesystem abstracts & unifies filesystem-like behaviour
