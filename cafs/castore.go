@@ -6,6 +6,7 @@
 package cafs
 
 import (
+	"context"
 	"errors"
 
 	"github.com/qri-io/qfs"
@@ -26,28 +27,26 @@ type Filestore interface {
 	// the resulting key (google "content addressing" for more info ;)
 	// keys returned by put must be prefixed with the PathPrefix,
 	// eg. /ipfs/QmZ3KfGaSrb3cnTriJbddCzG7hwQi2j6km7Xe7hVpnsW5S
-	Put(file qfs.File, pin bool) (key string, err error)
+	Put(ctx context.Context, file qfs.File, pin bool) (key string, err error)
 
 	// Get retrieves the object `value` named by `key`.
 	// Get will return ErrNotFound if the key is not mapped to a value.
-	Get(key string) (file qfs.File, err error)
+	Get(ctx context.Context, key string) (file qfs.File, err error)
 
 	// Has returns whether the `key` is mapped to a `value`.
 	// In some contexts, it may be much cheaper only to check for existence of
 	// a value, rather than retrieving the value itself. (e.g. HTTP HEAD).
 	// The default implementation is found in `GetBackedHas`.
-	Has(key string) (exists bool, err error)
+	Has(ctx context.Context, key string) (exists bool, err error)
 
 	// Delete removes the value for given `key`.
-	Delete(key string) error
+	Delete(ctx context.Context, key string) error
 
 	// NewAdder allocates an Adder instance for adding files to the filestore
 	// Adder gives a higher degree of control over the file adding process at the
 	// cost of being harder to work with.
 	// "pin" is a flag for recursively pinning this object
 	// "wrap" sets weather the top level should be wrapped in a directory
-	// expect this to change to something like:
-	// NewAdder(opt map[string]interface{}) (Adder, error)
 	NewAdder(pin, wrap bool) (Adder, error)
 
 	// PathPrefix is a top-level identifier to distinguish between filestores,
@@ -60,7 +59,7 @@ type Filestore interface {
 // filestores can opt into the fetcher interface
 type Fetcher interface {
 	// Fetch gets a file from a source
-	Fetch(source Source, key string) (qfs.File, error)
+	Fetch(ctx context.Context, source Source, key string) (qfs.File, error)
 }
 
 // Source identifies where a file should come from.
@@ -85,8 +84,8 @@ var (
 // the concept of pinning (originated by IPFS).
 // Necessarily asynchronous, with no stateful guarantees, currently not testable.
 type Pinner interface {
-	Pin(key string, recursive bool) error
-	Unpin(key string, recursive bool) error
+	Pin(ctx context.Context, key string, recursive bool) error
+	Unpin(ctx context.Context, key string, recursive bool) error
 }
 
 // Adder is the interface for adding files to a Filestore. The addition process
@@ -97,7 +96,7 @@ type Adder interface {
 	// AddFile adds a file or directory of files to the store
 	// this function will return immideately, consumers should read
 	// from the Added() channel to see the results of file addition.
-	AddFile(qfs.File) error
+	AddFile(context.Context, qfs.File) error
 	// Added gives a channel to read added files from.
 	Added() chan AddedFile
 	// In IPFS land close calls adder.Finalize() and adder.PinRoot()

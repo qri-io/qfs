@@ -51,7 +51,7 @@ func (fst *Filestore) Online() bool {
 	return true
 }
 
-func (fst *Filestore) Has(key string) (exists bool, err error) {
+func (fst *Filestore) Has(ctx context.Context, key string) (exists bool, err error) {
 	return false, fmt.Errorf("ipfs_http hasn't implemented has yet")
 	// // TODO (b5) - we should be scrutinizing the error that's returned here:
 	// if _, err = fst.node.Resolver.ResolvePath(fst.node.Context(), putil.Path(key)); err != nil {
@@ -61,20 +61,20 @@ func (fst *Filestore) Has(key string) (exists bool, err error) {
 	// return true, nil
 }
 
-func (fst *Filestore) Get(key string) (qfs.File, error) {
-	return fst.getKey(key)
+func (fst *Filestore) Get(ctx context.Context, key string) (qfs.File, error) {
+	return fst.getKey(ctx, key)
 }
 
-func (fst *Filestore) Fetch(source cafs.Source, key string) (qfs.File, error) {
-	return fst.getKey(key)
+func (fst *Filestore) Fetch(ctx context.Context, source cafs.Source, key string) (qfs.File, error) {
+	return fst.getKey(ctx, key)
 }
 
-func (fst *Filestore) Put(file qfs.File, pin bool) (key string, err error) {
+func (fst *Filestore) Put(ctx context.Context, file qfs.File, pin bool) (key string, err error) {
 	return "", fmt.Errorf("ipfs_http cannot put")
 }
 
-func (fst *Filestore) Delete(key string) error {
-	err := fst.Unpin(key, true)
+func (fst *Filestore) Delete(ctx context.Context, key string) error {
+	err := fst.Unpin(ctx, key, true)
 	if err != nil {
 		if err.Error() == "not pinned" {
 			return nil
@@ -83,8 +83,8 @@ func (fst *Filestore) Delete(key string) error {
 	return nil
 }
 
-func (fst *Filestore) getKey(key string) (qfs.File, error) {
-	node, err := fst.capi.Unixfs().Get(context.TODO(), path.New(key))
+func (fst *Filestore) getKey(ctx context.Context, key string) (qfs.File, error) {
+	node, err := fst.capi.Unixfs().Get(ctx, path.New(key))
 	if err != nil {
 		return nil, err
 	}
@@ -109,16 +109,16 @@ func pathFromHash(hash string) string {
 }
 
 // AddFile adds a file to the top level IPFS Node
-func (fst *Filestore) AddFile(file qfs.File, pin bool) (hash string, err error) {
+func (fst *Filestore) AddFile(ctx context.Context, file qfs.File, pin bool) (hash string, err error) {
 	return "", fmt.Errorf("ipfs_http doesn't support adding")
 }
 
-func (fst *Filestore) Pin(cid string, recursive bool) error {
-	return fst.capi.Pin().Add(context.Background(), path.New(cid))
+func (fst *Filestore) Pin(ctx context.Context, cid string, recursive bool) error {
+	return fst.capi.Pin().Add(ctx, path.New(cid))
 }
 
-func (fst *Filestore) Unpin(cid string, recursive bool) error {
-	return fst.capi.Pin().Rm(context.Background(), path.New(cid))
+func (fst *Filestore) Unpin(ctx context.Context, cid string, recursive bool) error {
+	return fst.capi.Pin().Rm(ctx, path.New(cid))
 }
 
 type wrapFile struct {

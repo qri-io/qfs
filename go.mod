@@ -38,5 +38,5 @@ require (
 	github.com/multiformats/go-multihash v0.0.5
 	golang.org/x/net v0.0.0-20190522155817-f3200d17e092 // indirect
 	golang.org/x/sys v0.0.0-20190610200419-93c9922d18ae
-	google.golang.org/appengine v1.4.0 // indirect
+	golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7 // indirect
 )

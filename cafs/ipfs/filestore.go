@@ -125,25 +125,25 @@ func (fst *Filestore) GoOnline(ctx context.Context) error {
 	return nil
 }
 
-func (fst *Filestore) Has(key string) (exists bool, err error) {
+func (fst *Filestore) Has(ctx context.Context, key string) (exists bool, err error) {
 
 	// TODO (b5) - we should be scrutinizing the error that's returned here:
-	if _, err = fst.node.Resolver.ResolvePath(fst.node.Context(), putil.Path(key)); err != nil {
+	if _, err = fst.node.Resolver.ResolvePath(ctx, putil.Path(key)); err != nil {
 		return false, nil
 	}
 
 	return true, nil
 }
 
-func (fst *Filestore) Get(key string) (qfs.File, error) {
-	return fst.getKey(key)
+func (fst *Filestore) Get(ctx context.Context, key string) (qfs.File, error) {
+	return fst.getKey(ctx, key)
 }
 
-func (fst *Filestore) Fetch(source cafs.Source, key string) (qfs.File, error) {
-	return fst.getKey(key)
+func (fst *Filestore) Fetch(ctx context.Context, source cafs.Source, key string) (qfs.File, error) {
+	return fst.getKey(ctx, key)
 }
 
-func (fst *Filestore) Put(file qfs.File, pin bool) (key string, err error) {
+func (fst *Filestore) Put(ctx context.Context, file qfs.File, pin bool) (key string, err error) {
 	hash, err := fst.AddFile(file, pin)
 	if err != nil {
 		log.Infof("error adding bytes: %s", err.Error())
@@ -152,8 +152,8 @@ func (fst *Filestore) Put(file qfs.File, pin bool) (key string, err error) {
 	return pathFromHash(hash), nil
 }
 
-func (fst *Filestore) Delete(key string) error {
-	err := fst.Unpin(key, true)
+func (fst *Filestore) Delete(ctx context.Context, key string) error {
+	err := fst.Unpin(ctx, key, true)
 	if err != nil {
 		if err.Error() == "not pinned" {
 			return nil
@@ -162,8 +162,8 @@ func (fst *Filestore) Delete(key string) error {
 	return nil
 }
 
-func (fst *Filestore) getKey(key string) (qfs.File, error) {
-	node, err := fst.capi.Unixfs().Get(fst.node.Context(), path.New(key))
+func (fst *Filestore) getKey(ctx context.Context, key string) (qfs.File, error) {
+	node, err := fst.capi.Unixfs().Get(ctx, path.New(key))
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +188,7 @@ type Adder struct {
 	pin   bool
 }
 
-func (a *Adder) AddFile(f qfs.File) error {
+func (a *Adder) AddFile(ctx context.Context, f qfs.File) error {
 	return a.adder.AddFile(wrapFile{f})
 }
 
@@ -356,12 +356,12 @@ func (fst *Filestore) AddFile(file qfs.File, pin bool) (hash string, err error) 
 	return
 }
 
-func (fst *Filestore) Pin(cid string, recursive bool) error {
-	return fst.capi.Pin().Add(context.Background(), path.New(cid))
+func (fst *Filestore) Pin(ctx context.Context, cid string, recursive bool) error {
+	return fst.capi.Pin().Add(ctx, path.New(cid))
 }
 
-func (fst *Filestore) Unpin(cid string, recursive bool) error {
-	return fst.capi.Pin().Rm(context.Background(), path.New(cid))
+func (fst *Filestore) Unpin(ctx context.Context, cid string, recursive bool) error {
+	return fst.capi.Pin().Rm(ctx, path.New(cid))
 }
 
 type wrapFile struct {
