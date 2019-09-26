@@ -2,15 +2,21 @@ package qfs
 
 import (
 	"bytes"
-	"io/ioutil"
 	"context"
+	"io/ioutil"
 	"testing"
 )
 
 func TestMemFS(t *testing.T) {
 	ctx := context.Background()
-	memfs := NewMemFS(testStore(0))
-	f, err := memfs.Get(ctx, "path")
+	memfs := NewMemFS()
+
+	hash, err := memfs.Put(ctx, NewMemfileBytes("path", []byte(`data`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f, err := memfs.Get(ctx, hash)
 	if err != nil {
 		t.Fatal(err)
 	}

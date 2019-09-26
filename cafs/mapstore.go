@@ -155,7 +155,6 @@ func (m *MapStore) Put(ctx context.Context, file qfs.File, pin bool) (key string
 		m.Files[key] = fsFile{name: file.FileName(), path: file.FullPath(), data: data}
 		return
 	}
-	return
 }
 
 // Get returns a File from the store
@@ -258,7 +257,7 @@ type adder struct {
 func (a *adder) AddFile(ctx context.Context, f qfs.File) error {
 	path, err := a.mapstore.Put(ctx, f, a.pin)
 	if err != nil {
-		fmt.Errorf("error putting file in mapstore: %s", err.Error())
+		err = fmt.Errorf("error putting file in mapstore: %s", err.Error())
 		return err
 	}
 	a.out <- AddedFile{
