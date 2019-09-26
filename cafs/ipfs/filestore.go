@@ -351,9 +351,6 @@ func (fst *Filestore) AddFile(file qfs.File, pin bool) (hash string, err error) 
 		}
 
 	}
-
-	err = fmt.Errorf("something's gone horribly wrong")
-	return
 }
 
 func (fst *Filestore) Pin(ctx context.Context, cid string, recursive bool) error {

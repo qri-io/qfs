@@ -29,6 +29,16 @@ type Filesystem interface {
 	PathResolver
 }
 
+// WritableFilesystem supports get, put, and delete operations
+type WritableFilesystem interface {
+	Filesystem
+	// Put places a file or directory on the filesystem, returning the root path.
+	// The returned path may or may not honor the path of the given file
+	Put(ctx context.Context, file File) (path string, err error)
+	// Delete removes a file or directory from the filesystem
+	Delete(ctx context.Context, path string) (err error)
+}
+
 // Destroyer is an optional interface to tear down a filesystem, removing all
 // persisted resources
 type Destroyer interface {
