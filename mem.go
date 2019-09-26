@@ -41,6 +41,9 @@ type MapStore struct {
 	Files   map[string]filer
 }
 
+// compile-time assertino that MapStore satsfies the Filesystem interface
+var _ Filesystem = (*MapStore)(nil)
+
 // PathPrefix returns the prefix on paths in the store
 func (m MapStore) PathPrefix() string {
 	return "memfs"

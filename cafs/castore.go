@@ -23,24 +23,24 @@ var (
 // toward compatibility with git (git-scm.com), then maybe other stuff, who knows.
 type Filestore interface {
 	// Put places a file or a directory in the store.
-	// The most notable difference from a standard file store is the store itself determines
-	// the resulting key (google "content addressing" for more info ;)
-	// keys returned by put must be prefixed with the PathPrefix,
+	// The most notable difference from a standard file store is the store itself
+	// determines the resulting path. paths returned by put must be prefixed with
+	// the PathPrefix:
 	// eg. /ipfs/QmZ3KfGaSrb3cnTriJbddCzG7hwQi2j6km7Xe7hVpnsW5S
-	Put(ctx context.Context, file qfs.File, pin bool) (key string, err error)
+	Put(ctx context.Context, file qfs.File) (path string, err error)
 
 	// Get retrieves the object `value` named by `key`.
 	// Get will return ErrNotFound if the key is not mapped to a value.
-	Get(ctx context.Context, key string) (file qfs.File, err error)
+	Get(ctx context.Context, path string) (file qfs.File, err error)
 
 	// Has returns whether the `key` is mapped to a `value`.
 	// In some contexts, it may be much cheaper only to check for existence of
 	// a value, rather than retrieving the value itself. (e.g. HTTP HEAD).
 	// The default implementation is found in `GetBackedHas`.
-	Has(ctx context.Context, key string) (exists bool, err error)
+	Has(ctx context.Context, path string) (exists bool, err error)
 
 	// Delete removes the value for given `key`.
-	Delete(ctx context.Context, key string) error
+	Delete(ctx context.Context, path string) error
 
 	// NewAdder allocates an Adder instance for adding files to the filestore
 	// Adder gives a higher degree of control over the file adding process at the

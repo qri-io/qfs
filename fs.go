@@ -10,14 +10,11 @@ import (
 var (
 	// ErrNotFound is the canonical error for not finding a value
 	ErrNotFound = errors.New("path not found")
+	// ErrReadOnly is a sentinel value for Filesystems that aren't writable
+	ErrReadOnly = errors.New("readonly filesystem")
 )
 
-// PathResolver is an interface for fetching files and directories from path strings.
-// in practice path strings can be things like:
-// * a local filesystem
-// * URLS (a "URL path resolver") or
-// * content-addressed file systems like IPFS or Git
-// Datasets & dataset components use a filesource to resolve string references
+// PathResolver is the "get" portion of a Filesystem
 type PathResolver interface {
 	Get(ctx context.Context, path string) (File, error)
 }
@@ -26,12 +23,13 @@ type PathResolver interface {
 // For now it's just a wrapper around PathResolver, but it'll expand once we merge
 // write-like functionality from cafs
 type Filesystem interface {
-	PathResolver
-}
-
-// WritableFilesystem supports get, put, and delete operations
-type WritableFilesystem interface {
-	Filesystem
+	// Get fetching files and directories from path strings.
+	// in practice path strings can be things like:
+	// * a local filesystem
+	// * URLS (a "URL path resolver") or
+	// * content-addressed file systems like IPFS or Git
+	// Datasets & dataset components use a filesource to resolve string references
+	Get(ctx context.Context, path string) (File, error)
 	// Put places a file or directory on the filesystem, returning the root path.
 	// The returned path may or may not honor the path of the given file
 	Put(ctx context.Context, file File) (path string, err error)
@@ -66,7 +64,7 @@ func AbsPath(path *string) (err error) {
 		return
 	}
 
-	// TODO - perform tilda (~) expansion
+	// TODO (b5) - perform tilda (~) expansion
 	if filepath.IsAbs(p) {
 		return
 	}
