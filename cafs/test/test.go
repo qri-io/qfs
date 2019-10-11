@@ -25,7 +25,7 @@ func EnsureFilestoreSingleFileBehavior(f cafs.Filestore) error {
 	ctx := context.Background()
 	fdata := []byte("foo")
 	file := qfs.NewMemfileBytes("file.txt", fdata)
-	key, err := f.Put(ctx, file, false)
+	key, err := f.Put(ctx, file)
 	if err != nil {
 		return fmt.Errorf("Filestore.Put(%s) error: %s", file.FileName(), err.Error())
 	}
@@ -80,7 +80,7 @@ func EnsureDirectoryBehavior(f cafs.Filestore) error {
 		),
 		qfs.NewMemfileBytes("e.txt", []byte("e")),
 	)
-	key, err := f.Put(ctx, file, false)
+	key, err := f.Put(ctx, file)
 	if err != nil {
 		return fmt.Errorf("Filestore.Put(%s) error: %s", file.FileName(), err.Error())
 	}

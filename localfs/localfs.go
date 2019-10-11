@@ -3,6 +3,7 @@ package localfs
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -47,6 +48,9 @@ type FS struct {
 	cfg *FSConfig
 }
 
+// compile-time assertion that MapStore satisfies the Filesystem interface
+var _ qfs.Filesystem = (*FS)(nil)
+
 // Get implements qfs.PathResolver
 func (lfs *FS) Get(ctx context.Context, path string) (qfs.File, error) {
 	fi, err := os.Stat(path)
@@ -71,6 +75,49 @@ func (lfs *FS) Get(ctx context.Context, path string) (qfs.File, error) {
 		path: path,
 		File: *f,
 	}, nil
+}
+
+// Put places a file or directory on the filesystem, returning the root path.
+// The returned path may or may not honor the path of the given file
+func (lfs *FS) Put(ctx context.Context, file qfs.File) (resultPath string, err error) {
+	path := file.FullPath()
+	// ensure directory exists
+	if err := os.MkdirAll(filepath.Dir(path), 0666); err != nil {
+		return "", err
+	}
+
+	if file.IsDirectory() {
+		for {
+			childFile, err := file.NextFile()
+			if err != nil {
+				if err.Error() == "EOF" {
+					return path, err
+				}
+
+				return "", err
+			}
+
+			if _, err = lfs.Put(ctx, childFile); err != nil {
+				return "", err
+			}
+		}
+		return path, nil
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		return path, err
+	}
+	defer f.Close()
+
+	_, err = io.Copy(f, file)
+	return path, err
+}
+
+// Delete removes a file or directory from the filesystem
+func (lfs *FS) Delete(ctx context.Context, path string) (err error) {
+	// TODO (b5):
+	return fmt.Errorf("deleting local files via qfs.Localfs is not finished")
 }
 
 // LocalFile implements qfs.File with a filesystem file

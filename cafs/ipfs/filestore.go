@@ -143,8 +143,9 @@ func (fst *Filestore) Fetch(ctx context.Context, source cafs.Source, key string)
 	return fst.getKey(ctx, key)
 }
 
-func (fst *Filestore) Put(ctx context.Context, file qfs.File, pin bool) (key string, err error) {
-	hash, err := fst.AddFile(file, pin)
+// Put adds a file and pins
+func (fst *Filestore) Put(ctx context.Context, file qfs.File) (key string, err error) {
+	hash, err := fst.AddFile(file, true)
 	if err != nil {
 		log.Infof("error adding bytes: %s", err.Error())
 		return

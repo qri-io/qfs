@@ -98,8 +98,8 @@ func (m MapStore) Print() (string, error) {
 	return buf.String(), nil
 }
 
-// Put adds a file to the store
-func (m *MapStore) Put(ctx context.Context, file qfs.File, pin bool) (key string, err error) {
+// Put adds a file to the store and pins
+func (m *MapStore) Put(ctx context.Context, file qfs.File) (key string, err error) {
 	if file.IsDirectory() {
 		buf := bytes.NewBuffer(nil)
 		dir := fsDir{
@@ -126,7 +126,7 @@ func (m *MapStore) Put(ctx context.Context, file qfs.File, pin bool) (key string
 				return
 			}
 
-			hash, e := m.Put(ctx, f, pin)
+			hash, e := m.Put(ctx, f)
 			if e != nil {
 				err = fmt.Errorf("error putting file: %s", e.Error())
 				return
@@ -232,7 +232,7 @@ func (m *MapStore) Fetch(ctx context.Context, source Source, key string) (qfs.Fi
 // Pin pins a File with the given key
 func (m *MapStore) Pin(ctx context.Context, key string, recursive bool) error {
 	if m.Pinned {
-		return fmt.Errorf("already pinned")
+		return nil
 	}
 	m.Pinned = true
 	return nil
@@ -241,7 +241,7 @@ func (m *MapStore) Pin(ctx context.Context, key string, recursive bool) error {
 // Unpin unpins a File with the given key
 func (m *MapStore) Unpin(ctx context.Context, key string, recursive bool) error {
 	if !m.Pinned {
-		return fmt.Errorf("not pinned")
+		return nil
 	}
 	m.Pinned = false
 	return nil
@@ -255,7 +255,7 @@ type adder struct {
 }
 
 func (a *adder) AddFile(ctx context.Context, f qfs.File) error {
-	path, err := a.mapstore.Put(ctx, f, a.pin)
+	path, err := a.mapstore.Put(ctx, f)
 	if err != nil {
 		err = fmt.Errorf("error putting file in mapstore: %s", err.Error())
 		return err

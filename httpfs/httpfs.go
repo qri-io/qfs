@@ -46,6 +46,9 @@ type FS struct {
 	cfg *FSConfig
 }
 
+// compile-time assertion that MapStore satisfies the Filesystem interface
+var _ qfs.Filesystem = (*FS)(nil)
+
 // Get implements qfs.PathResolver
 func (httpfs *FS) Get(ctx context.Context, path string) (qfs.File, error) {
 	req, err := http.NewRequest("GET", path, nil)
@@ -66,6 +69,17 @@ func (httpfs *FS) Get(ctx context.Context, path string) (qfs.File, error) {
 		path: path,
 		res:  resp,
 	}, nil
+}
+
+// Put places a file or directory on the filesystem, returning the root path.
+// The returned path may or may not honor the path of the given file
+func (httpfs *FS) Put(ctx context.Context, file qfs.File) (resultPath string, err error) {
+	return "", qfs.ErrReadOnly
+}
+
+// Delete removes a file or directory from the filesystem
+func (httpfs *FS) Delete(ctx context.Context, path string) (err error) {
+	return qfs.ErrReadOnly
 }
 
 // HTTPResFile implements qfs.File with a filesystem file

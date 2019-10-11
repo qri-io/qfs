@@ -85,7 +85,7 @@ func BenchmarkRead(b *testing.B) {
 		return
 	}
 
-	key, err := f.Put(ctx, qfs.NewMemfileBytes(filepath.Base(egFilePath), data), true)
+	key, err := f.Put(ctx, qfs.NewMemfileBytes(filepath.Base(egFilePath), data))
 	if err != nil {
 		b.Errorf("error putting example file in store: %s", err.Error())
 		return

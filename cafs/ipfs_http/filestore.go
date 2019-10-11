@@ -69,7 +69,7 @@ func (fst *Filestore) Fetch(ctx context.Context, source cafs.Source, key string)
 	return fst.getKey(ctx, key)
 }
 
-func (fst *Filestore) Put(ctx context.Context, file qfs.File, pin bool) (key string, err error) {
+func (fst *Filestore) Put(ctx context.Context, file qfs.File) (key string, err error) {
 	return "", fmt.Errorf("ipfs_http cannot put")
 }
 
