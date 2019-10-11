@@ -46,7 +46,7 @@ type FS struct {
 	cfg *FSConfig
 }
 
-// compile-time assertino that MapStore satsfies the Filesystem interface
+// compile-time assertion that MapStore satisfies the Filesystem interface
 var _ qfs.Filesystem = (*FS)(nil)
 
 // Get implements qfs.PathResolver

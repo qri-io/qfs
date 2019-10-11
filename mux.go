@@ -16,7 +16,7 @@ type Mux struct {
 	handlers map[string]Filesystem
 }
 
-// compile-time assertino that MapStore satsfies the Filesystem interface
+// compile-time assertion that MapStore satisfies the Filesystem interface
 var _ Filesystem = (*Mux)(nil)
 
 // SetHandler designates the resolver for a given path kind string
