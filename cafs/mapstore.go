@@ -240,11 +240,8 @@ func (m *MapStore) Pin(ctx context.Context, key string, recursive bool) error {
 
 // Unpin unpins a File with the given key
 func (m *MapStore) Unpin(ctx context.Context, key string, recursive bool) error {
-	if !m.Pinned {
-		return nil
-	}
 	m.Pinned = false
-	return nil
+	return m.Delete(ctx, key)
 }
 
 // Adder wraps a coreunix adder to conform to the cafs adder interface
