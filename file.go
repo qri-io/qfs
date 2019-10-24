@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"mime"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 var (
@@ -42,6 +44,16 @@ type File interface {
 	// available. If the file is a regular file (not a directory), NextFile
 	// will return a non-nil error.
 	NextFile() (File, error)
+
+	// ModTime returns file modification time
+	ModTime() time.Time
+
+	// MediaType returns a is a string that indicates the nature and format of a
+	// document, file, or assortment of bytes. Media types are described in IETF
+	// RFC 6838: https://tools.ietf.org/html/rfc6838
+	// MediaTypes expand on Multipurpose Internet Mail Extensions or MIME types,
+	// and can include "non-official" media type responses
+	MediaType() string
 }
 
 // type StatFile interface {
@@ -97,8 +109,9 @@ func Walk(root File, depth int, visit func(f File, depth int) error) (err error)
 
 // Memfile is an in-memory file
 type Memfile struct {
-	buf  io.Reader
-	path string
+	buf     io.Reader
+	path    string
+	modTime time.Time
 }
 
 // Confirm that Memfile satisfies the File interface
@@ -107,16 +120,18 @@ var _ = (File)(&Memfile{})
 // NewMemfileReader creates a file from an io.Reader
 func NewMemfileReader(path string, r io.Reader) *Memfile {
 	return &Memfile{
-		buf:  r,
-		path: path,
+		buf:     r,
+		path:    path,
+		modTime: time.Now(),
 	}
 }
 
 // NewMemfileBytes creates a file from a byte slice
 func NewMemfileBytes(path string, data []byte) *Memfile {
 	return &Memfile{
-		buf:  bytes.NewBuffer(data),
-		path: path,
+		buf:     bytes.NewBuffer(data),
+		path:    path,
+		modTime: time.Now(),
 	}
 }
 
@@ -159,12 +174,23 @@ func (Memfile) NextFile() (File, error) {
 	return nil, ErrNotDirectory
 }
 
+// MediaType for a memfile returns a mime type based on file extension
+func (m Memfile) MediaType() string {
+	return mime.TypeByExtension(filepath.Ext(m.path))
+}
+
+// ModTime returns the last-modified time for this file
+func (m Memfile) ModTime() time.Time {
+	return m.modTime
+}
+
 // Memdir is an in-memory directory
 // Currently it only supports either Memfile & Memdir as links
 type Memdir struct {
-	path  string
-	fi    int // file index for reading
-	links []File
+	path    string
+	fi      int // file index for reading
+	links   []File
+	modTime time.Time
 }
 
 // Confirm that Memdir satisfies the File interface
@@ -173,8 +199,9 @@ var _ = (File)(&Memdir{})
 // NewMemdir creates a new Memdir, supplying zero or more links
 func NewMemdir(path string, links ...File) *Memdir {
 	m := &Memdir{
-		path:  path,
-		links: []File{},
+		path:    path,
+		links:   []File{},
+		modTime: time.Now(),
 	}
 	m.AddChildren(links...)
 	return m
@@ -214,6 +241,17 @@ func (m *Memdir) NextFile() (File, error) {
 	}
 	defer func() { m.fi++ }()
 	return m.links[m.fi], nil
+}
+
+// MediaType is a directory mime-type stand-in
+func (m *Memdir) MediaType() string {
+	return "application/x-directory"
+}
+
+// ModTime returns the last-modified time for this directory
+// TODO (b5) - should modifying children affect this timestamp?
+func (m *Memdir) ModTime() time.Time {
+	return m.modTime
 }
 
 // SetPath implements the PathSetter interface

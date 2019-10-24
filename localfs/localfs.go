@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"mime"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/qri-io/qfs"
 )
@@ -126,6 +128,8 @@ type LocalFile struct {
 	path string
 }
 
+var _ qfs.File = (*LocalFile)(nil)
+
 // IsDirectory satisfies the qfs.File interface
 func (lf *LocalFile) IsDirectory() bool {
 	return false
@@ -144,4 +148,18 @@ func (lf *LocalFile) FileName() string {
 // FullPath returns the full path used when adding this file
 func (lf *LocalFile) FullPath() string {
 	return lf.path
+}
+
+// MediaType returns a mime type based on file extension
+func (lf *LocalFile) MediaType() string {
+	return mime.TypeByExtension(filepath.Ext(lf.path))
+}
+
+// ModTime returns time of last modification, if any
+func (lf *LocalFile) ModTime() time.Time {
+	st, err := os.Stat(lf.path)
+	if err != nil {
+		return time.Time{}
+	}
+	return st.ModTime()
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/qri-io/qfs"
 )
@@ -88,6 +90,8 @@ type HTTPResFile struct {
 	path string
 }
 
+var _ qfs.File = (*HTTPResFile)(nil)
+
 // Read proxies to the response body reader
 func (rf *HTTPResFile) Read(p []byte) (int, error) {
 	return rf.res.Body.Read(p)
@@ -116,4 +120,17 @@ func (rf *HTTPResFile) FileName() string {
 // FullPath returns the full path used when adding this file
 func (rf *HTTPResFile) FullPath() string {
 	return rf.path
+}
+
+// MediaType gets the value of the Content-Type response header
+func (rf *HTTPResFile) MediaType() string {
+	// TODO (b5) - this is super hacky
+	return strings.Split(rf.res.Header.Get("Content-Type"), ";")[0]
+}
+
+// ModTime gets the last time of modification. currently not implemented
+// for HTTP
+// TODO (b5) - finish
+func (rf *HTTPResFile) ModTime() time.Time {
+	return time.Time{}
 }
