@@ -13,10 +13,10 @@ import (
 	// Qri to writing IPLD. Lots to think about.
 	coreunix "github.com/qri-io/qfs/cafs/ipfs/coreunix"
 
+	"github.com/ipfs/go-cid"
 	core "github.com/ipfs/go-ipfs/core"
 	coreapi "github.com/ipfs/go-ipfs/core/coreapi"
 	logging "github.com/ipfs/go-log"
-	putil "github.com/ipfs/go-path"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/qri-io/qfs"
@@ -126,13 +126,11 @@ func (fst *Filestore) GoOnline(ctx context.Context) error {
 }
 
 func (fst *Filestore) Has(ctx context.Context, key string) (exists bool, err error) {
-
-	// TODO (b5) - we should be scrutinizing the error that's returned here:
-	if _, err = fst.node.Resolver.ResolvePath(ctx, putil.Path(key)); err != nil {
-		return false, nil
+	id, err := cid.Parse(key)
+	if err != nil {
+		return false, err
 	}
-
-	return true, nil
+	return fst.node.Blockstore.Has(id)
 }
 
 func (fst *Filestore) Get(ctx context.Context, key string) (qfs.File, error) {
