@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"path/filepath"
+	"time"
 
 	// Note coreunix is forked form github.com/ipfs/go-ipfs/core/coreunix
 	// we need coreunix.Adder.addFile to be exported to get access to dags while
@@ -167,8 +169,8 @@ func (fst *Filestore) getKey(ctx context.Context, key string) (qfs.File, error) 
 		return nil, err
 	}
 
-	if rdr, ok := node.(io.Reader); ok {
-		return qfs.NewMemfileReader(key, rdr), nil
+	if rdr, ok := node.(io.ReadCloser); ok {
+		return ipfsFile{path: key, r: rdr}, nil
 	}
 
 	// if _, isDir := node.(files.Directory); isDir {
@@ -378,4 +380,54 @@ func (w wrapFile) Seek(offset int64, whence int) (int64, error) {
 
 func (w wrapFile) Size() (int64, error) {
 	return 0, fmt.Errorf("wrapFile doesn't support Size")
+}
+
+type ipfsFile struct {
+	path string
+	r    io.ReadCloser
+}
+
+var _ qfs.File = (*ipfsFile)(nil)
+
+// Read proxies to the response body reader
+func (f ipfsFile) Read(p []byte) (int, error) {
+	return f.r.Read(p)
+}
+
+// Close proxies to the response body reader
+func (f ipfsFile) Close() error {
+	return f.r.Close()
+}
+
+// IsDirectory satisfies the qfs.File interface
+func (f ipfsFile) IsDirectory() bool {
+	return false
+}
+
+// NextFile satisfies the qfs.File interface
+func (f ipfsFile) NextFile() (qfs.File, error) {
+	return nil, qfs.ErrNotDirectory
+}
+
+// FileName returns a filename associated with this file
+func (f ipfsFile) FileName() string {
+	return filepath.Base(f.path)
+}
+
+// FullPath returns the full path used when adding this file
+func (f ipfsFile) FullPath() string {
+	return f.path
+}
+
+// MediaType maps an ipfs CID to a media type. Media types are not yet
+// implemented for ipfs files
+// TODO (b5) - finish
+func (f ipfsFile) MediaType() string {
+	return ""
+}
+
+// ModTime gets the last time of modification. ipfs files are immutable
+// and will always have a ModTime of zero
+func (f ipfsFile) ModTime() time.Time {
+	return time.Time{}
 }
