@@ -14,22 +14,27 @@ var (
 	ErrReadOnly = errors.New("readonly filesystem")
 )
 
-// PathResolver is the "get" portion of a Filesystem
-type PathResolver interface {
-	Get(ctx context.Context, path string) (File, error)
-}
-
-// Filesystem abstracts & unifies filesystem-like behaviour
-// For now it's just a wrapper around PathResolver, but it'll expand once we merge
-// write-like functionality from cafs
+// Filesystem abstracts & unifies filesystem-like behaviour with qri values
+//
+// A traditional file system is generally composed of three types:
+//   * file - resolve to a stream of bytes
+//   * directories - a colletion of one of the three types
+//   * symlinks - a pointer to one of the three types
+// a qfs Filesystem instead works with Files, which are composed of qri values
+// qri values extend byte streams into structured data
+// filesystems by default are read-only
 type Filesystem interface {
 	// Get fetching files and directories from path strings.
 	// in practice path strings can be things like:
 	// * a local filesystem
 	// * URLS (a "URL path resolver") or
 	// * content-addressed file systems like IPFS or Git
-	// Datasets & dataset components use a filesource to resolve string references
 	Get(ctx context.Context, path string) (File, error)
+}
+
+// WriteableFilesystem is a Filsystem that supports editing
+type WriteableFilesystem interface {
+	Filesystem
 	// Put places a file or directory on the filesystem, returning the root path.
 	// The returned path may or may not honor the path of the given file
 	Put(ctx context.Context, file File) (path string, err error)

@@ -46,26 +46,11 @@ func (m Mux) Get(ctx context.Context, path string) (File, error) {
 	return handler.Get(ctx, path)
 }
 
-// Put places a file or directory on the filesystem, returning the root path.
-// The returned path may or may not honor the path of the given file
-func (m Mux) Put(ctx context.Context, file File) (resPath string, err error) {
-	path := file.FullPath()
-	kind := PathKind(path)
-	handler, ok := m.handlers[kind]
+// Demux gets a filesystem for a given path kind
+func (m Mux) Demux(pathKind string) (Filesystem, error) {
+	fs, ok := m.handlers[pathKind]
 	if !ok {
-		return "", noMuxerError(kind, path)
+		return nil, fmt.Errorf("no filesystem called '%s' exists", pathKind)
 	}
-
-	return handler.Put(ctx, file)
-}
-
-// Delete removes a file or directory from the filesystem
-func (m Mux) Delete(ctx context.Context, path string) (err error) {
-	kind := PathKind(path)
-	handler, ok := m.handlers[kind]
-	if !ok {
-		return noMuxerError(kind, path)
-	}
-
-	return handler.Delete(ctx, path)
+	return fs, nil
 }

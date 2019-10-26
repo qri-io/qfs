@@ -1,9 +1,11 @@
-package ipfs_filestore
+package ipfsfs
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"path/filepath"
 	"time"
 
@@ -13,33 +15,34 @@ import (
 	// moving toward coreapi.coreUnix().Add() with properly-configured options,
 	// but I'd like a test before we do that. We may also want to consider switching
 	// Qri to writing IPLD. Lots to think about.
-	coreunix "github.com/qri-io/qfs/cafs/ipfs/coreunix"
+	coreunix "github.com/qri-io/qfs/ipfsfs/coreunix"
+	files "github.com/qri-io/qfs/ipfsfs/go-ipfs-files"
+	"github.com/qri-io/value"
 
 	"github.com/ipfs/go-cid"
 	core "github.com/ipfs/go-ipfs/core"
 	coreapi "github.com/ipfs/go-ipfs/core/coreapi"
+	ipldcbor "github.com/ipfs/go-ipld-cbor"
+	ipld "github.com/ipfs/go-ipld-format"
 	logging "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/qri-io/qfs"
 	cafs "github.com/qri-io/qfs/cafs"
-	files "github.com/qri-io/qfs/cafs/ipfs/go-ipfs-files"
 )
 
 var log = logging.Logger("cafs/ipfs")
 
 const prefix = "ipfs"
 
+// Filestore implements the qfs.Filesystem interface backed by an IPFS node
 type Filestore struct {
 	cfg  *StoreCfg
 	node *core.IpfsNode
 	capi coreiface.CoreAPI
 }
 
-func (fst Filestore) PathPrefix() string {
-	return prefix
-}
-
+// NewFilestore creates a filestore with optional configuration
 func NewFilestore(config ...Option) (*Filestore, error) {
 	cfg := DefaultConfig()
 	for _, option := range config {
@@ -80,6 +83,11 @@ func NewFilestore(config ...Option) (*Filestore, error) {
 	}, nil
 }
 
+// PathPrefix indicates this store works with files of "ipfs" kind
+func (fst Filestore) PathPrefix() string {
+	return prefix
+}
+
 // Node exposes the internal ipfs node
 //
 // Deprecated: use IPFSCoreAPI instead
@@ -92,10 +100,12 @@ func (fst *Filestore) IPFSCoreAPI() coreiface.CoreAPI {
 	return fst.capi
 }
 
+// Online returns true if this store is connected to a peer-2-peer network
 func (fst *Filestore) Online() bool {
 	return fst.node.IsOnline
 }
 
+// GoOnline connects to an IPFS peer-2-peer network
 func (fst *Filestore) GoOnline(ctx context.Context) error {
 	log.Debug("going online")
 	cfg := fst.cfg
@@ -127,6 +137,7 @@ func (fst *Filestore) GoOnline(ctx context.Context) error {
 	return nil
 }
 
+// Has checks for the existence of a path
 func (fst *Filestore) Has(ctx context.Context, key string) (exists bool, err error) {
 	id, err := cid.Parse(key)
 	if err != nil {
@@ -135,17 +146,22 @@ func (fst *Filestore) Has(ctx context.Context, key string) (exists bool, err err
 	return fst.node.Blockstore.Has(id)
 }
 
+// Get a key
 func (fst *Filestore) Get(ctx context.Context, key string) (qfs.File, error) {
 	return fst.getKey(ctx, key)
 }
 
+// Fetch implements the fetcher interface, fetching and pinning a key from the
+// connected IPFS network
+//
+// Deprecated: use Get a combination of Has, Get, and a connected node instead
 func (fst *Filestore) Fetch(ctx context.Context, source cafs.Source, key string) (qfs.File, error) {
 	return fst.getKey(ctx, key)
 }
 
 // Put adds a file and pins
 func (fst *Filestore) Put(ctx context.Context, file qfs.File) (key string, err error) {
-	hash, err := fst.AddFile(file, true)
+	hash, err := fst.AddFile(ctx, file, true)
 	if err != nil {
 		log.Infof("error adding bytes: %s", err.Error())
 		return
@@ -153,6 +169,7 @@ func (fst *Filestore) Put(ctx context.Context, file qfs.File) (key string, err e
 	return pathFromHash(hash), nil
 }
 
+// Delete removes & unpins a path
 func (fst *Filestore) Delete(ctx context.Context, key string) error {
 	err := fst.Unpin(ctx, key, true)
 	if err != nil {
@@ -181,6 +198,8 @@ func (fst *Filestore) getKey(ctx context.Context, key string) (qfs.File, error) 
 }
 
 // Adder wraps a coreunix adder to conform to the cafs adder interface
+//
+// Deprecated: use Put instead
 type Adder struct {
 	adder *coreunix.Adder
 	out   chan interface{}
@@ -281,77 +300,37 @@ func pathFromHash(hash string) string {
 }
 
 // AddFile adds a file to the top level IPFS Node
-func (fst *Filestore) AddFile(file qfs.File, pin bool) (hash string, err error) {
-	node := fst.Node()
-	ctx := context.Background()
+func (fst *Filestore) AddFile(ctx context.Context, file qfs.File, pin bool) (path string, err error) {
+	var adder ipld.NodeAdder = fst.capi.Dag()
+	if pin {
+		adder = fst.capi.Dag().Pinning()
+	}
+	b := ipld.NewBatch(ctx, adder)
 
-	fileAdder, err := coreunix.NewAdder(ctx, node.Pinning, node.Blockstore, node.DAG)
-	fileAdder.Pin = pin
-	// fileAdder.Wrap = file.IsDirectory()
+	// cbor data buffer
+	buf := &bytes.Buffer{}
+
+	// TODO (b5) - construct cbor tree, write to bytes this is a placeholder {"hello":"world"} for now
+	buf.Write([]byte{0xA1, 0x65, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x65, 0x77, 0x6F, 0x72, 0x6C, 0x64})
+
+	// providing math.MaxUint64 means "use the default multihash type", which is
+	// sha256 for ipld cbor. using the default type keeps us synced with the ipld
+	// ecosystem
+	// passing -1 as a multihash length again indicates "use default length"
+	nd, err := ipldcbor.Decode(buf.Bytes(), math.MaxUint64, -1)
 	if err != nil {
-		err = fmt.Errorf("error allocating adder: %s", err.Error())
-		return
+		return "", err
 	}
 
-	// wrap in a folder if top level is a file
-	if !file.IsDirectory() {
-		file = qfs.NewMemdir("/", file)
+	b.Add(ctx, nd)
+
+	path = nd.Cid().String()
+
+	if err = b.Commit(); err != nil {
+		return path, err
 	}
 
-	errChan := make(chan error, 0)
-	outChan := make(chan interface{}, 9)
-
-	fileAdder.Out = outChan
-
-	go func() {
-		defer close(outChan)
-		for {
-			file, err := file.NextFile()
-			if err == io.EOF {
-				// Finished the list of files.
-				break
-			} else if err != nil {
-				errChan <- err
-				return
-			}
-			if err := fileAdder.AddFile(wrapFile{file}); err != nil {
-				errChan <- err
-				return
-			}
-		}
-		if _, err = fileAdder.Finalize(); err != nil {
-			errChan <- fmt.Errorf("error finalizing file adder: %s", err.Error())
-			return
-		}
-		errChan <- nil
-		// node, err := fileAdder.CurRootNode()
-		// if err != nil {
-		// 	errChan <- fmt.Errorf("error finding root node: %s", err.Error())
-		// 	return
-		// }
-		// if err = fileAdder.PinRoot(); err != nil {
-		// 	errChan <- fmt.Errorf("error pinning file root: %s", err.Error())
-		// 	return
-		// }
-		// errChan <- nil
-	}()
-
-	for {
-		select {
-		case out, ok := <-outChan:
-			if !ok {
-				return
-			}
-			output := out.(*coreunix.AddEvent)
-			if len(output.Hash) > 0 {
-				hash = output.Hash
-				// return
-			}
-		case err := <-errChan:
-			return hash, err
-		}
-
-	}
+	return path, err
 }
 
 func (fst *Filestore) Pin(ctx context.Context, cid string, recursive bool) error {
@@ -430,4 +409,9 @@ func (f ipfsFile) MediaType() string {
 // and will always have a ModTime of zero
 func (f ipfsFile) ModTime() time.Time {
 	return time.Time{}
+}
+
+// Value returns the value of this file
+func (f ipfsFile) Value() value.Value {
+	return f
 }

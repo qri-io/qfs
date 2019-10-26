@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/qri-io/value"
 )
 
 var (
@@ -22,6 +24,8 @@ var (
 // File is an interface that provides functionality for handling
 // files/directories as values that can be supplied to commands. For
 // directories, child files are accessed serially by calling `NextFile()`.
+//
+// the content of a qfs File is a qri value
 type File interface {
 	// Files implement ReadCloser, but can only be read from or closed if
 	// they are not directories
@@ -45,15 +49,19 @@ type File interface {
 	// will return a non-nil error.
 	NextFile() (File, error)
 
-	// ModTime returns file modification time
+	// file modification time
 	ModTime() time.Time
 
-	// MediaType returns a is a string that indicates the nature and format of a
-	// document, file, or assortment of bytes. Media types are described in IETF
+	// MediaType is a string that indicates the nature and format of a document,
+	// file, or assortment of bytes. Media types are described in IETF
 	// RFC 6838: https://tools.ietf.org/html/rfc6838
 	// MediaTypes expand on Multipurpose Internet Mail Extensions or MIME types,
 	// and can include "non-official" media type responses
 	MediaType() string
+
+	// All files in qfs return a qri value. For more on qri values see
+	// github.com/qri-io/value
+	Value() value.Value
 }
 
 // type StatFile interface {
@@ -109,6 +117,7 @@ func Walk(root File, depth int, visit func(f File, depth int) error) (err error)
 
 // Memfile is an in-memory file
 type Memfile struct {
+	value   value.Value
 	buf     io.Reader
 	path    string
 	modTime time.Time
@@ -116,6 +125,15 @@ type Memfile struct {
 
 // Confirm that Memfile satisfies the File interface
 var _ = (File)(&Memfile{})
+
+// NewMemfile creates a file from a value.Value
+func NewMemfile(path string, v value.Value) *Memfile {
+	return &Memfile{
+		value:   v,
+		path:    path,
+		modTime: time.Now(),
+	}
+}
 
 // NewMemfileReader creates a file from an io.Reader
 func NewMemfileReader(path string, r io.Reader) *Memfile {
@@ -182,6 +200,17 @@ func (m Memfile) MediaType() string {
 // ModTime returns the last-modified time for this file
 func (m Memfile) ModTime() time.Time {
 	return m.modTime
+}
+
+// Value returns the value of the file
+func (m Memfile) Value() interface{} {
+	if m.value != nil {
+		return m.value
+	}
+
+	// Files embed Read and Close methods, making them a value.ByteReader
+	// if value is not set, return the file reader itself
+	return m
 }
 
 // Memdir is an in-memory directory
@@ -252,6 +281,15 @@ func (m *Memdir) MediaType() string {
 // TODO (b5) - should modifying children affect this timestamp?
 func (m *Memdir) ModTime() time.Time {
 	return m.modTime
+}
+
+// Value returns an iterator of files
+func (m *Memdir) Value() interface{} {
+	iface := make([]interface{}, len(m.links))
+	for i, l := range m.links {
+		iface[i] = l
+	}
+	return value.NewIterator(iface)
 }
 
 // SetPath implements the PathSetter interface

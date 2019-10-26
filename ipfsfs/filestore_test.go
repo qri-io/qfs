@@ -1,4 +1,4 @@
-package ipfs_filestore
+package ipfsfs
 
 import (
 	"context"
@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ipfs/go-ipfs/core"
 	"github.com/qri-io/qfs"
 	"github.com/qri-io/qfs/cafs"
 	"github.com/qri-io/qfs/cafs/test"
+	"github.com/qri-io/value"
 )
 
 var _ cafs.Fetcher = (*Filestore)(nil)
@@ -49,6 +51,38 @@ func TestFilestore(t *testing.T) {
 	if err != nil {
 		t.Errorf(err.Error())
 	}
+}
+
+func TestPutValues(t *testing.T) {
+	tr, cleanup := newTestRunner(t)
+	defer cleanup()
+
+	ds := map[string]interface{}{
+		"meta": value.NewResolvedLink(
+			"meta.json",
+			map[string]interface{}{
+				"title":   "I'm a title",
+				"homeUrl": value.NewLink("https://qri.io"), // note homeUrl is unresolved
+			}),
+		"transform": map[string]interface{}{
+			"syntax": "starlark",
+			"script": value.NewResolvedLink(
+				"tf.star",
+				qfs.NewMemfileBytes("tf.star", []byte(`# starlark script`)),
+			),
+		},
+		"body": value.NewResolvedLink(
+			"body.json",
+			qfs.NewMemfileBytes("body.json", []byte(`{"some":"body data"}`)),
+		),
+	}
+
+	f := qfs.NewMemfile("dataset.json", ds)
+	path, err := tr.FS.Put(tr.Ctx, f)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Log(path)
 }
 
 func BenchmarkRead(b *testing.B) {
@@ -117,4 +151,33 @@ func BenchmarkRead(b *testing.B) {
 		}
 	}
 
+}
+
+type testRunner struct {
+	Ctx  context.Context
+	Node *core.IpfsNode
+	FS   *Filestore
+}
+
+func newTestRunner(t *testing.T) (tr *testRunner, cleanup func()) {
+	ctx := context.Background()
+	node, _, err := makeAPI(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cleanup = func() {}
+
+	fs, err := NewFilestore(func(cfg *StoreCfg) {
+		cfg.Node = node
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return &testRunner{
+		Ctx:  ctx,
+		Node: node,
+		FS:   fs,
+	}, cleanup
 }

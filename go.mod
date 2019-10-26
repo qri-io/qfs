@@ -2,6 +2,8 @@ module github.com/qri-io/qfs
 
 go 1.12
 
+replace github.com/qri-io/value => /Users/b5/qri/value
+
 replace (
 	github.com/go-critic/go-critic v0.0.0-20181204210945-c3db6069acc5 => github.com/go-critic/go-critic v0.0.0-20190422201921-c3db6069acc5
 	github.com/go-critic/go-critic v0.0.0-20181204210945-ee9bf5809ead => github.com/go-critic/go-critic v0.0.0-20190210220443-ee9bf5809ead
@@ -26,6 +28,7 @@ require (
 	github.com/ipfs/go-ipfs-http-client v0.0.5
 	github.com/ipfs/go-ipfs-posinfo v0.0.1
 	github.com/ipfs/go-ipfs-util v0.0.1
+	github.com/ipfs/go-ipld-cbor v0.0.3
 	github.com/ipfs/go-ipld-format v0.0.2
 	github.com/ipfs/go-log v0.0.1
 	github.com/ipfs/go-merkledag v0.2.3
@@ -33,8 +36,12 @@ require (
 	github.com/ipfs/go-path v0.0.7
 	github.com/ipfs/go-unixfs v0.2.1
 	github.com/ipfs/interface-go-ipfs-core v0.2.3
+	github.com/libp2p/go-libp2p v0.4.0
+	github.com/libp2p/go-libp2p-core v0.2.3
+	github.com/libp2p/go-libp2p-peerstore v0.1.3
 	github.com/lucas-clemente/quic-go-certificates v0.0.0-20160823095156-d2f86524cced // indirect
 	github.com/mr-tron/base58 v1.1.2
 	github.com/multiformats/go-multihash v0.0.8
+	github.com/qri-io/value v0.0.0-00010101000000-000000000000
 	golang.org/x/sys v0.0.0-20190926180325-855e68c8590b
 )

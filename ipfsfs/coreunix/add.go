@@ -44,7 +44,7 @@ import (
 	balanced "github.com/ipfs/go-unixfs/importer/balanced"
 	ihelper "github.com/ipfs/go-unixfs/importer/helpers"
 	trickle "github.com/ipfs/go-unixfs/importer/trickle"
-	files "github.com/qri-io/qfs/cafs/ipfs/go-ipfs-files"
+	files "github.com/qri-io/qfs/ipfsfs/go-ipfs-files"
 )
 
 var log = logging.Logger("coreunix")
