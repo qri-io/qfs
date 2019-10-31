@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/qri-io/qfs"
+	"github.com/qri-io/value"
 )
 
 // FSConfig adjusts the behaviour of an FS instance
@@ -77,6 +78,16 @@ func (lfs *FS) Get(ctx context.Context, path string) (qfs.File, error) {
 		path: path,
 		File: *f,
 	}, nil
+}
+
+// Resolve fetches a link, caching the response value on the passed-in link
+func (lfs *FS) Resolve(ctx context.Context, l value.Link) (v value.Value, err error) {
+	f, err := lfs.Get(ctx, l.Path())
+	if err != nil {
+		return nil, err
+	}
+	l.Resolved(f.Value())
+	return f.Value(), nil
 }
 
 // Put places a file or directory on the filesystem, returning the root path.
@@ -162,4 +173,10 @@ func (lf *LocalFile) ModTime() time.Time {
 		return time.Time{}
 	}
 	return st.ModTime()
+}
+
+// Value returns file contents as a qri runtime value
+func (lf *LocalFile) Value() value.Value {
+	// TODO (b5) - finish implementation
+	return lf
 }

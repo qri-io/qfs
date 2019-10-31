@@ -10,6 +10,7 @@ import (
 
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-multihash"
+	"github.com/qri-io/value"
 )
 
 // NewMemFS allocates an instance of a mapstore
@@ -120,6 +121,15 @@ func (m *MapStore) Put(ctx context.Context, file File) (key string, err error) {
 		m.Files[key] = fsFile{name: file.FileName(), path: file.FullPath(), data: data}
 		return
 	}
+}
+
+func (m *MapStore) Resolve(ctx context.Context, l value.Link) (v value.Value, err error) {
+	f, err := m.Get(ctx, l.Path())
+	if err != nil {
+		return nil, err
+	}
+	l.Resolved(f.Value())
+	return f.Value(), nil
 }
 
 // Get returns a File from the store

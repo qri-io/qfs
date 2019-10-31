@@ -3,6 +3,8 @@ package qfs
 import (
 	"context"
 	"fmt"
+
+	"github.com/qri-io/value"
 )
 
 // NewMux creates a new path muxer
@@ -44,6 +46,39 @@ func (m Mux) Get(ctx context.Context, path string) (File, error) {
 	}
 
 	return handler.Get(ctx, path)
+}
+
+func (m Mux) Resolve(ctx context.Context, l value.Link) (v value.Value, err error) {
+	f, err := m.Get(ctx, l.Path())
+	if err != nil {
+		return nil, err
+	}
+	l.Resolved(f.Value())
+	return f.Value(), nil
+}
+
+// Put places a file or directory on the filesystem, returning the root path.
+// The returned path may or may not honor the path of the given file
+func (m Mux) Put(ctx context.Context, file File) (resPath string, err error) {
+	path := file.FullPath()
+	kind := PathKind(path)
+	handler, ok := m.handlers[kind]
+	if !ok {
+		return "", noMuxerError(kind, path)
+	}
+
+	return handler.Put(ctx, file)
+}
+
+// Delete removes a file or directory from the filesystem
+func (m Mux) Delete(ctx context.Context, path string) (err error) {
+	kind := PathKind(path)
+	handler, ok := m.handlers[kind]
+	if !ok {
+		return noMuxerError(kind, path)
+	}
+
+	return handler.Delete(ctx, path)
 }
 
 // Demux gets a filesystem for a given path kind

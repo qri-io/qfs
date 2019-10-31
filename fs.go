@@ -5,6 +5,8 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+
+	"github.com/qri-io/value"
 )
 
 var (
@@ -24,22 +26,28 @@ var (
 // qri values extend byte streams into structured data
 // filesystems by default are read-only
 type Filesystem interface {
+	value.Resolver
 	// Get fetching files and directories from path strings.
 	// in practice path strings can be things like:
 	// * a local filesystem
 	// * URLS (a "URL path resolver") or
 	// * content-addressed file systems like IPFS or Git
 	Get(ctx context.Context, path string) (File, error)
-}
-
-// WriteableFilesystem is a Filsystem that supports editing
-type WriteableFilesystem interface {
-	Filesystem
 	// Put places a file or directory on the filesystem, returning the root path.
 	// The returned path may or may not honor the path of the given file
 	Put(ctx context.Context, file File) (path string, err error)
 	// Delete removes a file or directory from the filesystem
 	Delete(ctx context.Context, path string) (err error)
+}
+
+// WritableFilesystem is a Filsystem that supports editing
+type WritableFilesystem interface {
+	Filesystem
+	// // Put places a file or directory on the filesystem, returning the root path.
+	// // The returned path may or may not honor the path of the given file
+	// Put(ctx context.Context, file File) (path string, err error)
+	// // Delete removes a file or directory from the filesystem
+	// Delete(ctx context.Context, path string) (err error)
 }
 
 // Destroyer is an optional interface to tear down a filesystem, removing all
@@ -83,7 +91,7 @@ func PathKind(path string) string {
 		return "none"
 	} else if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 		return "http"
-	} else if strings.HasPrefix(path, "/ipfs") {
+	} else if strings.HasPrefix(path, "/ipfs") || strings.HasPrefix(path, "/ipld") {
 		return "ipfs"
 	} else if strings.HasPrefix(path, "/map") || strings.HasPrefix(path, "/cafs") {
 		return "cafs"

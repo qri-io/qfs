@@ -11,6 +11,7 @@ import (
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-multihash"
 	"github.com/qri-io/qfs"
+	"github.com/qri-io/value"
 )
 
 // NewMapstore allocates an instance of a mapstore
@@ -183,6 +184,16 @@ func (m *MapStore) Get(ctx context.Context, key string) (qfs.File, error) {
 		}
 	}
 	return nil, ErrNotFound
+}
+
+// Resolve a link
+func (m *MapStore) Resolve(ctx context.Context, l value.Link) (v value.Value, err error) {
+	f, err := m.Get(ctx, l.Path())
+	if err != nil {
+		return nil, err
+	}
+	l.Resolved(f.Value())
+	return f.Value(), nil
 }
 
 func (m *MapStore) getLocal(key string) (qfs.File, error) {

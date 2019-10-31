@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/qri-io/qfs"
+	"github.com/qri-io/value"
 )
 
 // FSConfig adjusts the behaviour of an FS instance
@@ -50,6 +51,16 @@ type FS struct {
 
 // compile-time assertion that MapStore satisfies the Filesystem interface
 var _ qfs.Filesystem = (*FS)(nil)
+
+// Resolve fetches a link, caching it's value on the link itself
+func (httpfs *FS) Resolve(ctx context.Context, l value.Link) (v value.Value, err error) {
+	f, err := httpfs.Get(ctx, l.Path())
+	if err != nil {
+		return nil, err
+	}
+	l.Resolved(f.Value())
+	return f.Value(), nil
+}
 
 // Get implements qfs.PathResolver
 func (httpfs *FS) Get(ctx context.Context, path string) (qfs.File, error) {
@@ -133,4 +144,10 @@ func (rf *HTTPResFile) MediaType() string {
 // TODO (b5) - finish
 func (rf *HTTPResFile) ModTime() time.Time {
 	return time.Time{}
+}
+
+// Value exposes file contents as a qri runtime value
+func (rf *HTTPResFile) Value() value.Value {
+	// TODO (b5) - finish
+	return rf
 }

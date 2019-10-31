@@ -14,7 +14,8 @@ import (
 	httpapi "github.com/ipfs/go-ipfs-http-client"
 	qfs "github.com/qri-io/qfs"
 	cafs "github.com/qri-io/qfs/cafs"
-	files "github.com/qri-io/qfs/cafs/ipfs/go-ipfs-files"
+	files "github.com/qri-io/qfs/ipfsfs/go-ipfs-files"
+	"github.com/qri-io/value"
 )
 
 var log = logging.Logger("cafs/ipfs_http")
@@ -63,6 +64,17 @@ func (fst *Filestore) Has(ctx context.Context, key string) (exists bool, err err
 
 func (fst *Filestore) Get(ctx context.Context, key string) (qfs.File, error) {
 	return fst.getKey(ctx, key)
+}
+
+// Resolve a link
+func (fst *Filestore) Resolve(ctx context.Context, l value.Link) (v value.Value, err error) {
+	log.Debugf("resolve '%s'", l.Path())
+	f, err := fst.getKey(ctx, l.Path())
+	if err != nil {
+		return nil, err
+	}
+	l.Resolved(f.Value())
+	return f.Value(), nil
 }
 
 func (fst *Filestore) Fetch(ctx context.Context, source cafs.Source, key string) (qfs.File, error) {

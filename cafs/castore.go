@@ -10,6 +10,7 @@ import (
 	"errors"
 
 	"github.com/qri-io/qfs"
+	"github.com/qri-io/value"
 )
 
 var (
@@ -22,6 +23,7 @@ var (
 // It's currently form-fitting around IPFS (ipfs.io), with far-off plans to generalize
 // toward compatibility with git (git-scm.com), then maybe other stuff, who knows.
 type Filestore interface {
+	value.Resolver
 	// Put places a file or a directory in the store.
 	// The most notable difference from a standard file store is the store itself
 	// determines the resulting path. paths returned by put must be prefixed with

@@ -16,6 +16,7 @@ replace (
 )
 
 require (
+	github.com/google/go-cmp v0.3.1
 	github.com/ipfs/go-block-format v0.0.2
 	github.com/ipfs/go-blockservice v0.1.2
 	github.com/ipfs/go-cid v0.0.3
@@ -41,7 +42,9 @@ require (
 	github.com/libp2p/go-libp2p-peerstore v0.1.3
 	github.com/lucas-clemente/quic-go-certificates v0.0.0-20160823095156-d2f86524cced // indirect
 	github.com/mr-tron/base58 v1.1.2
+	github.com/multiformats/go-multibase v0.0.1
 	github.com/multiformats/go-multihash v0.0.8
 	github.com/qri-io/value v0.0.0-00010101000000-000000000000
+	github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8
 	golang.org/x/sys v0.0.0-20190926180325-855e68c8590b
 )

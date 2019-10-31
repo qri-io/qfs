@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/ipfs/go-ipfs/core"
 	"github.com/qri-io/qfs"
 	"github.com/qri-io/qfs/cafs"
@@ -62,19 +63,13 @@ func TestPutValues(t *testing.T) {
 			"meta.json",
 			map[string]interface{}{
 				"title":   "I'm a title",
-				"homeUrl": value.NewLink("https://qri.io"), // note homeUrl is unresolved
+				"homeUrl": value.NewLink("https://qri.io"), // note homeUrl is unresolved, should be stored as a string
 			}),
 		"transform": map[string]interface{}{
 			"syntax": "starlark",
-			"script": value.NewResolvedLink(
-				"tf.star",
-				qfs.NewMemfileBytes("tf.star", []byte(`# starlark script`)),
-			),
+			"script": qfs.NewMemfileBytes("tf.star", []byte(`# starlark script`)),
 		},
-		"body": value.NewResolvedLink(
-			"body.json",
-			qfs.NewMemfileBytes("body.json", []byte(`{"some":"body data"}`)),
-		),
+		"body": qfs.NewMemfileBytes("body.json", []byte(`{"some":"body data"}`)),
 	}
 
 	f := qfs.NewMemfile("dataset.json", ds)
@@ -83,6 +78,36 @@ func TestPutValues(t *testing.T) {
 		t.Error(err)
 	}
 	t.Log(path)
+
+	res, err := tr.FS.Get(tr.Ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expect := map[interface{}]interface{}{
+		"meta": value.NewLink("bafy2bzacedfbu3whofebydm6rnilvgtvc4ercx7gxussjgtcrvpyhz5j44o6s"),
+		"transform": map[interface{}]interface{}{
+			"syntax": "starlark",
+			"script": value.NewLink("QmQsvVMRALob2PZArwTUeBhUSJ7otAdv4cZJyb38LdYHwq"),
+		},
+		"body": value.NewLink("QmQRLygmdEa7kMRwKAWrWj2G1y868PZUWvy9gjtQsLuTkz"),
+	}
+
+	linkComparer := cmp.Comparer(func(a, b value.Link) bool {
+		return a.Path() == b.Path()
+	})
+
+	if diff := cmp.Diff(expect, res.Value(), linkComparer); diff != "" {
+		t.Errorf("result mismatch. (-want +got):\n%s", diff)
+	}
+
+	var resolver value.Resolver = tr.FS
+	metaVal, err := resolver.Resolve(tr.Ctx, expect["meta"].(value.Link))
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Logf("%#v", metaVal)
 }
 
 func BenchmarkRead(b *testing.B) {

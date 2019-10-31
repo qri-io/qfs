@@ -5,8 +5,8 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math"
 	"path/filepath"
+	"reflect"
 	"time"
 
 	// Note coreunix is forked form github.com/ipfs/go-ipfs/core/coreunix
@@ -17,7 +17,6 @@ import (
 	// Qri to writing IPLD. Lots to think about.
 	coreunix "github.com/qri-io/qfs/ipfsfs/coreunix"
 	files "github.com/qri-io/qfs/ipfsfs/go-ipfs-files"
-	"github.com/qri-io/value"
 
 	"github.com/ipfs/go-cid"
 	core "github.com/ipfs/go-ipfs/core"
@@ -29,17 +28,24 @@ import (
 	"github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/qri-io/qfs"
 	cafs "github.com/qri-io/qfs/cafs"
+	"github.com/qri-io/value"
+	"github.com/ugorji/go/codec"
 )
 
-var log = logging.Logger("cafs/ipfs")
+var log = logging.Logger("ipfsfs")
 
-const prefix = "ipfs"
+const (
+	prefix = "ipfs"
+	// we use blake2b 256 as a multihash type
+	mhType = uint64(0xb220)
+)
 
 // Filestore implements the qfs.Filesystem interface backed by an IPFS node
 type Filestore struct {
-	cfg  *StoreCfg
-	node *core.IpfsNode
-	capi coreiface.CoreAPI
+	cfg        *StoreCfg
+	node       *core.IpfsNode
+	capi       coreiface.CoreAPI
+	cborHandle *codec.CborHandle
 }
 
 // NewFilestore creates a filestore with optional configuration
@@ -49,6 +55,12 @@ func NewFilestore(config ...Option) (*Filestore, error) {
 		option(cfg)
 	}
 
+	h := &codec.CborHandle{TimeRFC3339: true}
+	h.Canonical = true
+	if err := h.SetInterfaceExt(ipldLinkTyp, ipldcbor.CBORTagLink, &tBytesExt); err != nil {
+		return nil, err
+	}
+
 	if cfg.Node != nil {
 		capi, err := coreapi.NewCoreAPI(cfg.Node)
 		if err != nil {
@@ -56,9 +68,10 @@ func NewFilestore(config ...Option) (*Filestore, error) {
 		}
 
 		return &Filestore{
-			cfg:  cfg,
-			node: cfg.Node,
-			capi: capi,
+			cfg:        cfg,
+			node:       cfg.Node,
+			capi:       capi,
+			cborHandle: h,
 		}, nil
 	}
 
@@ -77,9 +90,10 @@ func NewFilestore(config ...Option) (*Filestore, error) {
 	}
 
 	return &Filestore{
-		cfg:  cfg,
-		node: node,
-		capi: capi,
+		cfg:        cfg,
+		node:       node,
+		capi:       capi,
+		cborHandle: h,
 	}, nil
 }
 
@@ -151,6 +165,17 @@ func (fst *Filestore) Get(ctx context.Context, key string) (qfs.File, error) {
 	return fst.getKey(ctx, key)
 }
 
+// Resolve a link
+func (fst *Filestore) Resolve(ctx context.Context, l value.Link) (v value.Value, err error) {
+	log.Debugf("resolve '%s'", l.Path())
+	f, err := fst.getKey(ctx, l.Path())
+	if err != nil {
+		return nil, err
+	}
+	l.Resolved(f.Value())
+	return f.Value(), nil
+}
+
 // Fetch implements the fetcher interface, fetching and pinning a key from the
 // connected IPFS network
 //
@@ -160,13 +185,110 @@ func (fst *Filestore) Fetch(ctx context.Context, source cafs.Source, key string)
 }
 
 // Put adds a file and pins
-func (fst *Filestore) Put(ctx context.Context, file qfs.File) (key string, err error) {
-	hash, err := fst.AddFile(ctx, file, true)
+func (fst *Filestore) Put(ctx context.Context, file qfs.File) (path string, err error) {
+	adder := fst.capi.Dag().Pinning()
+	b := ipld.NewBatch(ctx, adder)
+
+	v, err := fst.prepValuePut(ctx, b, file.Value())
 	if err != nil {
-		log.Infof("error adding bytes: %s", err.Error())
-		return
+		return path, err
 	}
-	return pathFromHash(hash), nil
+
+	nd, err := fst.toIPLDCBORNode(v)
+	if err != nil {
+		return path, err
+	}
+
+	if err = b.Add(ctx, nd); err != nil {
+		return path, err
+	}
+
+	if err = b.Commit(); err != nil {
+		return path, err
+	}
+
+	path = nd.Cid().String()
+	return "/ipld/" + path, err
+}
+
+// ReadExt updates a value from a []byte.
+//
+// Note: dst is always a pointer kind to the registered extension type.
+func (l IpldLink) ReadExt(dst interface{}, src []byte) {
+	if ptr, ok := dst.(*IpldLink); ok {
+		*ptr = IpldLink(string(src))
+	}
+}
+
+func (fst *Filestore) prepValuePut(ctx context.Context, b *ipld.Batch, v value.Value) (res interface{}, err error) {
+	if qriLink, ok := v.(value.Link); ok {
+		if linkVal, resolved := qriLink.Value(); resolved {
+			prepped, err := fst.prepValuePut(ctx, b, linkVal)
+			if err != nil {
+				return nil, err
+			}
+			nd, err := fst.toIPLDCBORNode(prepped)
+			if err != nil {
+				return nil, err
+			}
+			if err = b.Add(ctx, nd); err != nil {
+				return nil, err
+			}
+
+			id := nd.Cid().Bytes()
+			return IpldLink([]byte(id)), nil
+		}
+
+		// unresolved links are stored as strings
+		return qriLink.Path(), nil
+	}
+
+	if file, ok := v.(qfs.File); ok {
+		path, err := fst.capi.Unixfs().Add(ctx, wrapFile{file})
+		if err != nil {
+			return nil, err
+		}
+		return IpldLink(path.Cid().Bytes()), nil
+	}
+
+	switch x := v.(type) {
+	case map[string]interface{}:
+		for key, val := range x {
+			if x[key], err = fst.prepValuePut(ctx, b, val); err != nil {
+				return nil, err
+			}
+		}
+	case map[interface{}]interface{}:
+		for key, val := range x {
+			if x[key], err = fst.prepValuePut(ctx, b, val); err != nil {
+				return nil, err
+			}
+		}
+	case []interface{}:
+		for i, v := range x {
+			if x[i], err = fst.prepValuePut(ctx, b, v); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return v, err
+}
+
+func (fst *Filestore) toIPLDCBORNode(v value.Value) (ipld.Node, error) {
+	// cbor data buffer
+	buf := &bytes.Buffer{}
+
+	enc := codec.NewEncoder(buf, fst.cborHandle)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+
+	// providing math.MaxUint64 means "use the default multihash type", which is
+	// sha256 for ipld cbor. using the default type keeps us synced with the ipld
+	// ecosystem
+	// passing -1 as a multihash length again indicates "use default length"
+	return ipldcbor.Decode(buf.Bytes(), mhType, -1)
 }
 
 // Delete removes & unpins a path
@@ -181,20 +303,81 @@ func (fst *Filestore) Delete(ctx context.Context, key string) error {
 }
 
 func (fst *Filestore) getKey(ctx context.Context, key string) (qfs.File, error) {
-	node, err := fst.capi.Unixfs().Get(ctx, path.New(key))
-	if err != nil {
-		return nil, err
-	}
+	log.Debugf("getKey '%s'", key)
+	p := path.New(key)
+	switch p.Namespace() {
+	case "ipfs":
+		node, err := fst.capi.Unixfs().Get(ctx, p)
+		if err != nil {
+			return nil, err
+		}
 
-	if rdr, ok := node.(io.ReadCloser); ok {
-		return ipfsFile{path: key, r: rdr}, nil
+		if rdr, ok := node.(io.ReadCloser); ok {
+			return ipfsFile{path: key, r: rdr}, nil
+		}
+
+		return nil, fmt.Errorf("path is neither a file nor a directory")
+	case "ipld":
+		rp, err := fst.capi.ResolvePath(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		node, err := fst.capi.Dag().Get(ctx, rp.Cid())
+		if err != nil {
+			return nil, err
+		}
+
+		var v interface{}
+		enc := codec.NewDecoder(bytes.NewReader(node.RawData()), fst.cborHandle)
+		if err = enc.Decode(&v); err != nil {
+			return nil, err
+		}
+
+		v, err = prepValueResponse(v)
+		if err != nil {
+			return nil, err
+		}
+
+		return qfs.NewMemfile(key, v), nil
+	default:
+		return nil, fmt.Errorf("unrecognized path namespace: %s", p.Namespace())
 	}
 
 	// if _, isDir := node.(files.Directory); isDir {
 	// 	return nil, fmt.Errorf("filestore doesn't support getting directories")
 	// }
+}
 
-	return nil, fmt.Errorf("path is neither a file nor a directory")
+func prepValueResponse(ipldval interface{}) (v value.Value, err error) {
+	switch x := ipldval.(type) {
+	case IpldLink:
+		id, err := cid.Cast([]byte(x))
+		if err != nil {
+			return nil, fmt.Errorf("invalid link: %w", err)
+		}
+		// TODO (b5) - oh this bad.
+		if id.String()[:2] == "Qm" {
+			return value.NewLink(path.IpfsPath(id).String()), nil
+		}
+		return value.NewLink(path.IpldPath(id).String()), nil
+	case map[interface{}]interface{}:
+		if _, ok := x["/"]; ok {
+			return value.NewResolvedLink("", x["/"]), nil
+		}
+
+		for key, val := range x {
+			if x[key], err = prepValueResponse(val); err != nil {
+				return nil, err
+			}
+		}
+	case []interface{}:
+		for i, v := range x {
+			if x[i], err = prepValueResponse(v); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return ipldval, nil
 }
 
 // Adder wraps a coreunix adder to conform to the cafs adder interface
@@ -299,40 +482,6 @@ func pathFromHash(hash string) string {
 	return fmt.Sprintf("/%s/%s", prefix, hash)
 }
 
-// AddFile adds a file to the top level IPFS Node
-func (fst *Filestore) AddFile(ctx context.Context, file qfs.File, pin bool) (path string, err error) {
-	var adder ipld.NodeAdder = fst.capi.Dag()
-	if pin {
-		adder = fst.capi.Dag().Pinning()
-	}
-	b := ipld.NewBatch(ctx, adder)
-
-	// cbor data buffer
-	buf := &bytes.Buffer{}
-
-	// TODO (b5) - construct cbor tree, write to bytes this is a placeholder {"hello":"world"} for now
-	buf.Write([]byte{0xA1, 0x65, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x65, 0x77, 0x6F, 0x72, 0x6C, 0x64})
-
-	// providing math.MaxUint64 means "use the default multihash type", which is
-	// sha256 for ipld cbor. using the default type keeps us synced with the ipld
-	// ecosystem
-	// passing -1 as a multihash length again indicates "use default length"
-	nd, err := ipldcbor.Decode(buf.Bytes(), math.MaxUint64, -1)
-	if err != nil {
-		return "", err
-	}
-
-	b.Add(ctx, nd)
-
-	path = nd.Cid().String()
-
-	if err = b.Commit(); err != nil {
-		return path, err
-	}
-
-	return path, err
-}
-
 func (fst *Filestore) Pin(ctx context.Context, cid string, recursive bool) error {
 	return fst.capi.Pin().Add(ctx, path.New(cid))
 }
@@ -414,4 +563,31 @@ func (f ipfsFile) ModTime() time.Time {
 // Value returns the value of this file
 func (f ipfsFile) Value() value.Value {
 	return f
+}
+
+var (
+	ipldLinkTyp = reflect.TypeOf(IpldLink(nil))
+	tBytesExt   ipldLinkExt
+)
+
+type IpldLink []byte
+
+type ipldLinkExt struct{}
+
+func (x *ipldLinkExt) ConvertExt(v interface{}) interface{} {
+	d := ([]byte)(v.(IpldLink))
+	return append([]byte{0}, d...)
+}
+
+func (x *ipldLinkExt) UpdateExt(dest interface{}, v interface{}) {
+	v2 := dest.(*IpldLink)
+	// some formats (e.g. json) cannot nakedly determine []byte from string, so expect both
+	switch v3 := v.(type) {
+	case []byte:
+		*v2 = IpldLink(v3[1:])
+	case string:
+		*v2 = IpldLink([]byte(v3[1:]))
+	default:
+		panic("UpdateExt for ipldLinkExt expects string or []byte")
+	}
 }
