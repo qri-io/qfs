@@ -36,8 +36,18 @@ type Filesystem interface {
 	// Put places a file or directory on the filesystem, returning the root path.
 	// The returned path may or may not honor the path of the given file
 	Put(ctx context.Context, file File) (path string, err error)
+
+	// Has returns whether `path` is mapped to a local value, without any fetching
+	// outside of the hueristics of localness defined by the store
+	Has(ctx context.Context, path string) (exists bool, err error)
+
 	// Delete removes a file or directory from the filesystem
 	Delete(ctx context.Context, path string) (err error)
+
+	// PathPrefixes returns a slice of top-level identifiers used to distinguish
+	// string paths this filestore works with and emits
+	// For exmaple, an HTTP filestore might return ["http://","https://"]
+	PathPrefixes() []string
 }
 
 // WritableFilesystem is a Filsystem that supports editing

@@ -48,6 +48,9 @@ type Filestore struct {
 	cborHandle *codec.CborHandle
 }
 
+// assert at compile time that Filestore is a qfs.Filesystem
+var _ qfs.Filesystem = (*Filestore)(nil)
+
 // NewFilestore creates a filestore with optional configuration
 func NewFilestore(config ...Option) (*Filestore, error) {
 	cfg := DefaultConfig()
@@ -98,8 +101,15 @@ func NewFilestore(config ...Option) (*Filestore, error) {
 }
 
 // PathPrefix indicates this store works with files of "ipfs" kind
+//
+// Deprecated: need to support cafs.Filestore, which is on the way out
 func (fst Filestore) PathPrefix() string {
 	return prefix
+}
+
+// PathPrefixes indicates this store works with /ipfs and /ipld
+func (fst Filestore) PathPrefixes() []string {
+	return []string{"/ipfs", "/ipld"}
 }
 
 // Node exposes the internal ipfs node
@@ -186,29 +196,37 @@ func (fst *Filestore) Fetch(ctx context.Context, source cafs.Source, key string)
 
 // Put adds a file and pins
 func (fst *Filestore) Put(ctx context.Context, file qfs.File) (path string, err error) {
-	adder := fst.capi.Dag().Pinning()
-	b := ipld.NewBatch(ctx, adder)
+	if file.Value() != nil {
+		adder := fst.capi.Dag().Pinning()
+		b := ipld.NewBatch(ctx, adder)
 
-	v, err := fst.prepValuePut(ctx, b, file.Value())
+		v, err := fst.prepValuePut(ctx, b, file.Value())
+		if err != nil {
+			return path, err
+		}
+
+		nd, err := fst.toIPLDCBORNode(v)
+		if err != nil {
+			return path, err
+		}
+
+		if err = b.Add(ctx, nd); err != nil {
+			return path, err
+		}
+
+		if err = b.Commit(); err != nil {
+			return path, err
+		}
+
+		path = nd.Cid().String()
+		return "/ipld/" + path, err
+	}
+
+	res, err := fst.capi.Unixfs().Add(ctx, wrapFile{file})
 	if err != nil {
-		return path, err
+		return "", err
 	}
-
-	nd, err := fst.toIPLDCBORNode(v)
-	if err != nil {
-		return path, err
-	}
-
-	if err = b.Add(ctx, nd); err != nil {
-		return path, err
-	}
-
-	if err = b.Commit(); err != nil {
-		return path, err
-	}
-
-	path = nd.Cid().String()
-	return "/ipld/" + path, err
+	return res.String(), nil
 }
 
 // ReadExt updates a value from a []byte.

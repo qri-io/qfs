@@ -50,6 +50,11 @@ func (m MapStore) PathPrefix() string {
 	return "memfs"
 }
 
+// PathPrefixes returns the prefix on paths in the store
+func (m MapStore) PathPrefixes() []string {
+	return []string{"/mem", "/map"}
+}
+
 // Print converts the store to a string
 func (m MapStore) Print() (string, error) {
 	buf := &bytes.Buffer{}

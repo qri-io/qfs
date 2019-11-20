@@ -33,6 +33,15 @@ func noMuxerError(kind, path string) error {
 	return fmt.Errorf("cannot resolve paths of kind '%s'. path: %s", kind, path)
 }
 
+// PathPrefixes returns the collection prefixes this muxer supports
+func (m Mux) PathPrefixes() []string {
+	pfs := make([]string, 0)
+	for _, fs := range m.handlers {
+		pfs = append(pfs, fs.PathPrefixes()...)
+	}
+	return pfs
+}
+
 // Get a path
 func (m Mux) Get(ctx context.Context, path string) (File, error) {
 	if path == "" {
@@ -46,6 +55,21 @@ func (m Mux) Get(ctx context.Context, path string) (File, error) {
 	}
 
 	return handler.Get(ctx, path)
+}
+
+// Has checks for path existence
+func (m Mux) Has(ctx context.Context, path string) (bool, error) {
+	if path == "" {
+		return false, ErrNotFound
+	}
+
+	kind := PathKind(path)
+	handler, ok := m.handlers[kind]
+	if !ok {
+		return false, noMuxerError(kind, path)
+	}
+
+	return handler.Has(ctx, path)
 }
 
 func (m Mux) Resolve(ctx context.Context, l value.Link) (v value.Value, err error) {

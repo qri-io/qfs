@@ -13,6 +13,7 @@ import (
 	"github.com/qri-io/qfs"
 	"github.com/qri-io/qfs/cafs"
 	"github.com/qri-io/qfs/cafs/test"
+	"github.com/qri-io/qfs/filestoretest"
 	"github.com/qri-io/value"
 )
 
@@ -26,7 +27,7 @@ func init() {
 	}
 }
 
-func TestFilestore(t *testing.T) {
+func TestCAFSFilestore(t *testing.T) {
 	path := filepath.Join(os.TempDir(), "ipfs_cafs_test")
 	if err := os.MkdirAll(path, os.ModePerm); err != nil {
 		t.Errorf("error creating temp dir: %s", err.Error())
@@ -52,6 +53,31 @@ func TestFilestore(t *testing.T) {
 	if err != nil {
 		t.Errorf(err.Error())
 	}
+}
+
+func TestFilesystem(t *testing.T) {
+	path := filepath.Join(os.TempDir(), "ipfs_qfs_test")
+	if err := os.MkdirAll(path, os.ModePerm); err != nil {
+		t.Errorf("error creating temp dir: %s", err.Error())
+		return
+	}
+	defer os.RemoveAll(path)
+
+	if err := InitRepo(path, ""); err != nil {
+		t.Errorf("error intializing repo: %s", err.Error())
+		return
+	}
+
+	fs, err := NewFilestore(func(c *StoreCfg) {
+		c.Online = false
+		c.FsRepoPath = path
+	})
+	if err != nil {
+		t.Errorf("error creating filestore: %s", err.Error())
+		return
+	}
+
+	filestoretest.RunChecks(t, fs)
 }
 
 func TestPutValues(t *testing.T) {

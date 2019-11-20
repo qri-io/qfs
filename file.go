@@ -210,7 +210,8 @@ func (m Memfile) Value() interface{} {
 
 	// Files embed Read and Close methods, making them a value.ByteReader
 	// if value is not set, return the file reader itself
-	return m
+	// return m
+	return nil
 }
 
 // Memdir is an in-memory directory
