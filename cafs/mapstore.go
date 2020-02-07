@@ -98,6 +98,19 @@ func (m MapStore) Print() (string, error) {
 	return buf.String(), nil
 }
 
+// PutFileAtKey puts the file at the given key
+func (m *MapStore) PutFileAtKey(ctx context.Context, key string, file qfs.File) error {
+	if file.IsDirectory() {
+		return fmt.Errorf("PutFileAtKey does not work with directories")
+	}
+	data, err := ioutil.ReadAll(file)
+	if err != nil {
+		return err
+	}
+	m.Files[key] = fsFile{name: file.FileName(), path: file.FullPath(), data: data}
+	return nil
+}
+
 // Put adds a file to the store and pins
 func (m *MapStore) Put(ctx context.Context, file qfs.File) (key string, err error) {
 	if file.IsDirectory() {
