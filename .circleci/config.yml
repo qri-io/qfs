@@ -1,13 +1,11 @@
-version: '2'
+version: 2
 jobs:
   build:
     working_directory: /go/src/github.com/qri-io/qfs
     docker:
-      - image: circleci/golang:1.12
+      - image: circleci/golang:1.13.10
         environment:
-          GOLANG_ENV: test
           GO111MODULE: "on"
-          GOPROXY: "https://proxy.golang.org"
     environment:
       TEST_RESULTS: /tmp/test-results
     steps:

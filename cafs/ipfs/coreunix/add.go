@@ -33,9 +33,9 @@ import (
 	cid "github.com/ipfs/go-cid"
 	bstore "github.com/ipfs/go-ipfs-blockstore"
 	chunker "github.com/ipfs/go-ipfs-chunker"
+	pin "github.com/ipfs/go-ipfs-pinner"
 	posinfo "github.com/ipfs/go-ipfs-posinfo"
 	"github.com/ipfs/go-ipfs/core"
-	"github.com/ipfs/go-ipfs/pin"
 	ipld "github.com/ipfs/go-ipld-format"
 	logging "github.com/ipfs/go-log"
 	dag "github.com/ipfs/go-merkledag"
@@ -224,7 +224,7 @@ func (adder *Adder) PinRoot() error {
 	}
 
 	adder.pinning.PinWithMode(rnk, pin.Recursive)
-	return adder.pinning.Flush()
+	return adder.pinning.Flush(context.TODO())
 }
 
 // Finalize flushes the mfs root directory and returns the mfs root node.

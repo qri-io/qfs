@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	config "github.com/ipfs/go-ipfs-config"
 	"github.com/ipfs/go-ipfs/assets"
@@ -51,14 +52,32 @@ func InitRepo(repoPath, configPath string) error {
 		}
 	}
 
-	if err := doInit(ioutil.Discard, repoPath, false, nBitsForKeypair, nil, conf); err != nil {
+	if err := doInit(ioutil.Discard, repoPath, false, nBitsForKeypair, "", conf); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func doInit(out io.Writer, repoRoot string, empty bool, nBitsForKeypair int, confProfiles []string, conf *config.Config) error {
+func applyProfiles(conf *config.Config, profiles string) error {
+	if profiles == "" {
+		return nil
+	}
+
+	for _, profile := range strings.Split(profiles, ",") {
+		transformer, ok := config.Profiles[profile]
+		if !ok {
+			return fmt.Errorf("invalid configuration profile: %s", profile)
+		}
+
+		if err := transformer.Transform(conf); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func doInit(out io.Writer, repoRoot string, empty bool, nBitsForKeypair int, confProfiles string, conf *config.Config) error {
 
 	if err := checkWriteable(repoRoot); err != nil {
 		return err
@@ -79,15 +98,8 @@ func doInit(out io.Writer, repoRoot string, empty bool, nBitsForKeypair int, con
 		}
 	}
 
-	for _, profileStr := range confProfiles {
-		profile, ok := config.Profiles[profileStr]
-		if !ok {
-			return fmt.Errorf("invalid configuration profile: %s", profileStr)
-		}
-
-		if err := profile.Transform(conf); err != nil {
-			return err
-		}
+	if err := applyProfiles(conf, confProfiles); err != nil {
+		return err
 	}
 
 	if err := fsrepo.Init(repoRoot, conf); err != nil {
