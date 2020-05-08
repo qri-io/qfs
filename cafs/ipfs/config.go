@@ -3,9 +3,12 @@ package ipfs_filestore
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/ipfs/go-ipfs/core"
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
+	"github.com/mitchellh/go-homedir"
 )
 
 // StoreCfg configures the datastore
@@ -86,5 +89,26 @@ func (cfg *StoreCfg) InitRepo(ctx context.Context) error {
 		}()
 		cfg.Repo = localRepo
 	}
+	return nil
+}
+
+// MoveIPFSRepoOnToQriPath moves the ipfs repo from wherever it is,
+// indicated by the store config, to live on the QRI_PATH
+func MoveIPFSRepoOnToQriPath(o *StoreCfg) error {
+	qriRepoPath := os.Getenv("QRI_PATH")
+	if qriRepoPath == "" {
+		home, err := homedir.Dir()
+		if err != nil {
+			panic(err)
+		}
+		qriRepoPath = filepath.Join(home, ".qri")
+	}
+	newIPFSPath := filepath.Join(qriRepoPath, filepath.Base(o.FsRepoPath))
+
+	if err := os.Rename(o.FsRepoPath, newIPFSPath); err != nil {
+		return err
+	}
+	// this should really do some update config action
+	o.FsRepoPath = newIPFSPath
 	return nil
 }
