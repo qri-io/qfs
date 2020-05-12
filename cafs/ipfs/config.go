@@ -9,6 +9,7 @@ import (
 	"github.com/ipfs/go-ipfs/core"
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
 	"github.com/mitchellh/go-homedir"
+	"github.com/mitchellh/mapstructure"
 )
 
 // StoreCfg configures the datastore
@@ -23,6 +24,17 @@ type StoreCfg struct {
 	Ctx context.Context
 	// EnableAPI
 	EnableAPI bool
+}
+
+func mapToConfig(cfgmap map[string]interface{}) (*StoreCfg, error) {
+	if cfgmap == nil {
+		return DefaultConfig(), nil
+	}
+	cfg := &StoreCfg{}
+	if err := mapstructure.Decode(cfgmap, cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
 }
 
 // DefaultConfig results in a local node that

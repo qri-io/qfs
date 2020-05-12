@@ -36,7 +36,7 @@ func TestFilestore(t *testing.T) {
 		return
 	}
 
-	f, err := NewFilestore(func(c *StoreCfg) {
+	f, err := NewFilestore(nil, func(c *StoreCfg) {
 		c.Online = false
 		c.FsRepoPath = path
 	})
@@ -69,7 +69,7 @@ func BenchmarkRead(b *testing.B) {
 		defer os.RemoveAll(path)
 	}
 
-	f, err := NewFilestore(func(c *StoreCfg) {
+	f, err := NewFilestore(nil, func(c *StoreCfg) {
 		c.Online = false
 		c.FsRepoPath = path
 	})

@@ -40,8 +40,12 @@ func (fst Filestore) PathPrefix() string {
 	return prefix
 }
 
-func NewFilestore(config ...Option) (*Filestore, error) {
-	cfg := DefaultConfig()
+func NewFilestore(cfgMap map[string]interface{}, config ...Option) (*Filestore, error) {
+	cfg, err := mapToConfig(cfgMap)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, option := range config {
 		option(cfg)
 	}
