@@ -27,6 +27,9 @@ const (
 var errRepoExists = errors.New(`ipfs configuration file already exists!
 Reinitializing would overwrite your keys.
 `)
+var errRepoLock = errors.New(`this repo is currently being accessed by another process
+This could mean that an ipfs daemon is running. please stop it before running this command
+`)
 
 // InitRepo is a more specific version of the init command: github.com/ipfs/go-ipfs/cmd/ipfs/init.go
 // it's adapted to let qri initialize a repo. This func should be maintained to reflect the
@@ -35,8 +38,7 @@ func InitRepo(repoPath, configPath string) error {
 	if daemonLocked, err := fsrepo.LockedByOtherProcess(repoPath); err != nil {
 		return err
 	} else if daemonLocked {
-		e := "ipfs daemon is running. please stop it to run this command"
-		return fmt.Errorf(e)
+		return errRepoLock
 	}
 
 	var conf *config.Config

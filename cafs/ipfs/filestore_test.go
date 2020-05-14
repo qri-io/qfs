@@ -10,6 +10,7 @@ import (
 
 	"github.com/qri-io/qfs"
 	"github.com/qri-io/qfs/cafs"
+	"github.com/qri-io/qfs/cafs/ipfs_http"
 	"github.com/qri-io/qfs/cafs/test"
 )
 
@@ -48,6 +49,53 @@ func TestFilestore(t *testing.T) {
 	err = test.EnsureFilestoreBehavior(f)
 	if err != nil {
 		t.Errorf(err.Error())
+	}
+}
+
+func TestFilestoreCreatedWithAPIAddr(t *testing.T) {
+	path := filepath.Join(os.TempDir(), "ipfs_cafs_test")
+	if err := os.MkdirAll(path, os.ModePerm); err != nil {
+		t.Errorf("error creating temp dir: %s", err.Error())
+		return
+	}
+	defer os.RemoveAll(path)
+
+	// create an repo
+	if err := InitRepo(path, ""); err != nil {
+		t.Errorf("error intializing repo: %s", err.Error())
+		return
+	}
+
+	// create an ipfs fs with that repo
+	_, err := NewFilestore(nil, func(c *StoreCfg) {
+		c.Online = false
+		c.FsRepoPath = path
+		c.EnableAPI = true
+	})
+	if err != nil {
+		t.Errorf("error creating filestore: %s", err.Error())
+		return
+	}
+
+	// attempt to create another filestore using the same repo
+	if _, err := NewFilestore(nil, func(c *StoreCfg) {
+		c.Online = false
+		c.FsRepoPath = path
+	}); err == nil {
+		t.Errorf("There should be a repo lock error when attempting to create another filesystem using the same repo path, however no error occured")
+	}
+
+	// create another filestore but with a fallback api address
+	cafs, err := NewFilestore(nil, func(c *StoreCfg) {
+		c.Online = false
+		c.FsRepoPath = path
+		c.APIAddr = "127.0.0.1:5001/api/v0/swarm/peers"
+	})
+	if err != nil {
+		t.Errorf("error creating ipfs_http filesystem: %s", err)
+	}
+	if _, ok := cafs.(*ipfs_http.Filestore); !ok {
+		t.Errorf("returned filesystem is not of expected type `ipft_http`")
 	}
 }
 

@@ -24,6 +24,10 @@ type StoreCfg struct {
 	Ctx context.Context
 	// EnableAPI
 	EnableAPI bool
+	// ApiAddr is an ipfs http api address, used as a fallback if we cannot
+	// config an ipfs filesystem. The filesystem will instead be a `ipfs_http`
+	// filesystem.
+	APIAddr string
 }
 
 func mapToConfig(cfgmap map[string]interface{}) (*StoreCfg, error) {
@@ -88,6 +92,11 @@ func (cfg *StoreCfg) InitRepo(ctx context.Context) error {
 		return nil
 	}
 	if cfg.FsRepoPath != "" {
+		if daemonLocked, err := fsrepo.LockedByOtherProcess(cfg.FsRepoPath); err != nil {
+			return err
+		} else if daemonLocked {
+			return errRepoLock
+		}
 		localRepo, err := fsrepo.Open(cfg.FsRepoPath)
 		if err != nil {
 			if err == fsrepo.ErrNeedMigration {

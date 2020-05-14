@@ -6,7 +6,6 @@ import (
 
 	"github.com/qri-io/qfs"
 	qipfs "github.com/qri-io/qfs/cafs/ipfs"
-	"github.com/qri-io/qfs/cafs/ipfs_http"
 	"github.com/qri-io/qfs/httpfs"
 	"github.com/qri-io/qfs/localfs"
 )
@@ -71,12 +70,6 @@ func New(ctx context.Context, cfgs []MuxConfig, opts ...Option) (*Mux, error) {
 				return nil, err
 			}
 			mux.handlers["ipfs"] = fs
-		case "ipfs_http":
-			fs, err := ipfs_http.NewFS(cfg.Options)
-			if err != nil {
-				return nil, err
-			}
-			mux.handlers["ipfs_http"] = fs
 		case "local":
 			fs, err := localfs.NewFS(cfg.Options)
 			if err != nil {
@@ -89,6 +82,9 @@ func New(ctx context.Context, cfgs []MuxConfig, opts ...Option) (*Mux, error) {
 				return nil, err
 			}
 			mux.handlers["http"] = fs
+		case "mem":
+		case "test":
+			mux.handlers["mem"] = qfs.NewMemFS()
 		}
 	}
 	return mux, nil
