@@ -45,3 +45,24 @@ func TestAbsPath(t *testing.T) {
 		}
 	}
 }
+
+func TestPathKind(t *testing.T) {
+	cases := []struct {
+		in, out string
+	}{
+		{"", "none"},
+		{"http://example", "http"},
+		{"https://example", "http"},
+		{"/path/to/location", "local"},
+		{"/", "local"},
+		{"/ipfs/Qmfoo", "ipfs"},
+		{"/map/Qmfoo", "mem"},
+	}
+
+	for i, c := range cases {
+		got := PathKind(c.in)
+		if got != c.out {
+			t.Errorf("case %d: expected: %s, got :%s", i, c.out, got)
+		}
+	}
+}
