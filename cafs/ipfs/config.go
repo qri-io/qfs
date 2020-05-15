@@ -8,16 +8,6 @@ import (
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
 )
 
-var ErrIPFSRepoNeedsMigration = fmt.Errorf(`Your IPFS repo needs an update!
-
-Please make sure you have the latest version of IPFS (go-ipfs, at least v0.4.17)
-from either https://dist.ipfs.io or your favourite package manager. 
-
-Then run 'ipfs daemon' from a terminal. It should ask if you'd like to perform
-a migration, select yes. 
-
-Once you've migrated, run Qri connect again.`)
-
 // StoreCfg configures the datastore
 type StoreCfg struct {
 	// embed options for creating a node
@@ -86,9 +76,9 @@ func (cfg *StoreCfg) InitRepo(ctx context.Context) error {
 		localRepo, err := fsrepo.Open(cfg.FsRepoPath)
 		if err != nil {
 			if err == fsrepo.ErrNeedMigration {
-				return ErrIPFSRepoNeedsMigration
+				return ErrNeedMigration
 			}
-			return fmt.Errorf("error opening local filestore ipfs repository: %s", err.Error())
+			return fmt.Errorf("error opening local filestore ipfs repository: %w", err)
 		}
 		go func() {
 			<-ctx.Done()
