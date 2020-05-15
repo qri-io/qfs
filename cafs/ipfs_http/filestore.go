@@ -28,7 +28,7 @@ type Filestore struct {
 
 // FSConfig adjusts the behaviour of an FS instance
 type FSConfig struct {
-	ipfsApiURL string // url to the ipfs api
+	IpfsApiUrl string // url to the ipfs api
 }
 
 func (fst Filestore) PathPrefix() string {
@@ -53,7 +53,7 @@ func NewFS(cfgMap map[string]interface{}) (*Filestore, error) {
 	if err != nil {
 		return nil, err
 	}
-	cli, err := httpapi.NewURLApiWithClient(cfg.ipfsApiURL, http.DefaultClient)
+	cli, err := httpapi.NewURLApiWithClient(cfg.IpfsApiUrl, http.DefaultClient)
 	if err != nil {
 		return nil, err
 	}

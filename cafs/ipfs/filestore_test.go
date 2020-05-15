@@ -85,7 +85,7 @@ func TestFilestoreCreatedWithAPIAddr(t *testing.T) {
 		t.Errorf("There should be a repo lock error when attempting to create another filesystem using the same repo path, however no error occured")
 	}
 
-	// create another filestore but with a fallback api address
+	// create another filestore, but with a fallback api address
 	cafs, err := NewFilestore(nil, func(c *StoreCfg) {
 		c.Online = false
 		c.FsRepoPath = path

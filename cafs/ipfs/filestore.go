@@ -68,7 +68,7 @@ func NewFilestore(cfgMap map[string]interface{}, config ...Option) (cafs.Filesto
 		if cfg.APIAddr != "" && err == errRepoLock {
 			// if we cannot get a repo, and we have a fallback APIAdder
 			// attempt to create and return an `ipfs_http` filesystem istead
-			fs, err := ipfs_http.NewFS(map[string]interface{}{"ipfsApiURL": cfg.APIAddr})
+			fs, err := ipfs_http.NewFS(map[string]interface{}{"ipfsApiUrl": cfg.APIAddr})
 			if err != nil {
 				return nil, err
 			}
