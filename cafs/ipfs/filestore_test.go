@@ -52,8 +52,8 @@ func TestFilestore(t *testing.T) {
 	}
 }
 
-func TestFilestoreCreatedWithAPIAddr(t *testing.T) {
-	path := filepath.Join(os.TempDir(), "ipfs_cafs_test")
+func TestCreatedWithAPIAddrFilestore(t *testing.T) {
+	path := filepath.Join(os.TempDir(), "ipfs_cafs_test_api_addr")
 	if err := os.MkdirAll(path, os.ModePerm); err != nil {
 		t.Errorf("error creating temp dir: %s", err.Error())
 		return

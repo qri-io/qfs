@@ -32,23 +32,26 @@ type StoreCfg struct {
 
 func mapToConfig(cfgmap map[string]interface{}) (*StoreCfg, error) {
 	if cfgmap == nil {
-		return DefaultConfig(), nil
+		return DefaultConfig(""), nil
 	}
 	cfg := &StoreCfg{}
 	if err := mapstructure.Decode(cfgmap, cfg); err != nil {
 		return nil, err
+	}
+	if cfg.Ctx == nil {
+		cfg.Ctx = context.Background()
 	}
 	return cfg, nil
 }
 
 // DefaultConfig results in a local node that
 // attempts to draw from the default ipfs filesotre location
-func DefaultConfig() *StoreCfg {
+func DefaultConfig(path string) *StoreCfg {
 	return &StoreCfg{
 		BuildCfg: core.BuildCfg{
 			Online: false,
 		},
-		FsRepoPath: "~/.ipfs",
+		FsRepoPath: path,
 		Ctx:        context.Background(),
 	}
 }

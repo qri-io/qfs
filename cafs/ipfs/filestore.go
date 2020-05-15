@@ -2,6 +2,7 @@ package ipfs_filestore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -30,6 +31,9 @@ import (
 var log = logging.Logger("cafs/ipfs")
 
 const prefix = "ipfs"
+
+// ErrNoRepoPath is returned when no repo path is provided in the config
+var ErrNoRepoPath = errors.New("must provide a repo path ('fsRepoPath') to initialize an ipfs filesystem")
 
 type Filestore struct {
 	cfg  *StoreCfg
@@ -62,6 +66,10 @@ func NewFilestore(cfgMap map[string]interface{}, config ...Option) (cafs.Filesto
 			node: cfg.Node,
 			capi: capi,
 		}, nil
+	}
+
+	if cfg.FsRepoPath == "" {
+		return nil, ErrNoRepoPath
 	}
 
 	if err := cfg.InitRepo(cfg.Ctx); err != nil {
