@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/qri-io/qfs"
+	"github.com/qri-io/qfs/cafs"
 	qipfs "github.com/qri-io/qfs/cafs/ipfs"
 	"github.com/qri-io/qfs/httpfs"
 	"github.com/qri-io/qfs/localfs"
@@ -34,13 +35,13 @@ func (m *Mux) SetHandler(pathKind string, resolver qfs.Filesystem) {
 
 // Option is a function that manipulates config details when fed to New(). Fields on
 // the o parameter may be null, functions cannot assume the Config is non-null.
-type Option func(o []MuxConfig) error
+type Option func(o *[]MuxConfig) error
 
 // MuxConfig contains the information needed to create a new filesystem
 type MuxConfig struct {
-	Type    string                 `json:"type"`
-	Options map[string]interface{} `json:"options,omitempty"`
-	Source  string                 `json:"source,omitempty"`
+	Type   string                 `json:"type"`
+	Config map[string]interface{} `json:"options,omitempty"`
+	Source string                 `json:"source,omitempty"`
 }
 
 // New creates a new Mux Filesystem, if no Option funcs are provided,
@@ -57,7 +58,7 @@ func New(ctx context.Context, cfgs []MuxConfig, opts ...Option) (*Mux, error) {
 	}
 
 	for _, opt := range opts {
-		if err := opt(cfgs); err != nil {
+		if err := opt(&cfgs); err != nil {
 			return nil, err
 		}
 	}
@@ -65,19 +66,19 @@ func New(ctx context.Context, cfgs []MuxConfig, opts ...Option) (*Mux, error) {
 	for _, cfg := range cfgs {
 		switch cfg.Type {
 		case "ipfs":
-			fs, err := qipfs.NewFilestore(cfg.Options)
+			fs, err := qipfs.NewFilestore(cfg.Config)
 			if err != nil {
 				return nil, err
 			}
 			mux.handlers["ipfs"] = fs
 		case "local":
-			fs, err := localfs.NewFS(cfg.Options)
+			fs, err := localfs.NewFS(cfg.Config)
 			if err != nil {
 				return nil, err
 			}
 			mux.handlers["local"] = fs
 		case "http":
-			fs, err := httpfs.NewFS(cfg.Options)
+			fs, err := httpfs.NewFS(cfg.Config)
 			if err != nil {
 				return nil, err
 			}
@@ -131,4 +132,41 @@ func (m Mux) Delete(ctx context.Context, path string) (err error) {
 	}
 
 	return handler.Delete(ctx, path)
+}
+
+// OptSetIPFSPath allows you to set an ipfs for the
+func OptSetIPFSPath(path string) Option {
+	return func(o *[]MuxConfig) error {
+		if o == nil {
+			return fmt.Errorf("cannot have nil options for a Mux Filesystem")
+		}
+		ipfs := &MuxConfig{}
+		for _, mc := range *o {
+			if mc.Type == "ipfs" {
+				ipfs = &mc
+				break
+			}
+		}
+		if ipfs.Config == nil {
+			ipfs.Config = map[string]interface{}{}
+		}
+		ipfs.Config["fsRepoPath"] = path
+		if ipfs.Type == "" {
+			ipfs.Type = "ipfs"
+			newO := append(*o, *ipfs)
+			*o = newO
+		}
+		fmt.Println(o)
+		return nil
+	}
+}
+
+// CAFSStoreFromIPFS takes the ipfs file store and returns it as a
+// cafs filestore, if no ipfs fs exists on the mux, returns nil
+func (m *Mux) CAFSStoreFromIPFS() cafs.Filestore {
+	ipfsFS, ok := m.handlers["ipfs"]
+	if !ok {
+		return nil
+	}
+	return ipfsFS.(cafs.Filestore)
 }
