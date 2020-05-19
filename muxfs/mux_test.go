@@ -9,6 +9,14 @@ import (
 	qipfs "github.com/qri-io/qfs/cafs/ipfs"
 )
 
+func init() {
+	// call LoadPlugins once with the empty string b/c we only rely on standard
+	// plugins
+	if err := qipfs.LoadPlugins(""); err != nil {
+		panic(err)
+	}
+}
+
 func TestDefaultNewMux(t *testing.T) {
 	// create a mux that has an fs for
 	// ipfs
@@ -31,8 +39,8 @@ func TestDefaultNewMux(t *testing.T) {
 	ctx := context.Background()
 	cfg := []MuxConfig{
 		{Type: "ipfs", Config: map[string]interface{}{"fsRepoPath": path}},
-		{Type: "httpfs"},
-		{Type: "localfs"},
+		{Type: "http"},
+		{Type: "local"},
 		{Type: "mem"},
 	}
 	mfs, err := New(ctx, cfg)
@@ -40,21 +48,17 @@ func TestDefaultNewMux(t *testing.T) {
 		t.Errorf("error creating new mux: %s", err)
 		return
 	}
-	_, ok := mfs.handlers["ipfs"]
-	if !ok {
+	if _, ok := mfs.handlers["ipfs"]; !ok {
 		t.Errorf("expected 'ipfs' filesystem, got none")
 	}
-	_, ok = mfs.handlers["httpfs"]
-	if !ok {
-		t.Errorf("expected 'ipfs' filesystem, got none")
+	if _, ok := mfs.handlers["http"]; !ok {
+		t.Errorf("expected 'http' filesystem, got none")
 	}
-	_, ok = mfs.handlers["localfs"]
-	if !ok {
-		t.Errorf("expected 'ipfs' filesystem, got none")
+	if _, ok := mfs.handlers["local"]; !ok {
+		t.Errorf("expected 'local' filesystem, got none")
 	}
-	_, ok = mfs.handlers["mem"]
-	if !ok {
-		t.Errorf("expected 'ipfs' filesystem, got none")
+	if _, ok := mfs.handlers["mem"]; !ok {
+		t.Errorf("expected 'mem' filesystem, got none")
 	}
 }
 

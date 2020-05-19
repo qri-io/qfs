@@ -6,9 +6,9 @@ import (
 
 	"github.com/qri-io/qfs"
 	"github.com/qri-io/qfs/cafs"
-	qipfs "github.com/qri-io/qfs/cafs/ipfs"
-	"github.com/qri-io/qfs/httpfs"
-	"github.com/qri-io/qfs/localfs"
+	// qipfs "github.com/qri-io/qfs/cafs/ipfs"
+	// "github.com/qri-io/qfs/httpfs"
+	// "github.com/qri-io/qfs/localfs"
 )
 
 // NewMux creates a new path muxer
@@ -44,6 +44,15 @@ type MuxConfig struct {
 	Source string                 `json:"source,omitempty"`
 }
 
+// constructors maps filesystem type strings to constructor functions
+var constructors = map[string]qfs.FSConstructor{
+	// TODO (ramfox) - adapt each subsystem to the FSConstructor signature
+	// "ipfs":  qipfs.NewFilestore,
+	// "local": localfs.NewFS,
+	// "http":  httpfs.NewFS,
+	// "mem":   qfs.NewMemFS,
+}
+
 // New creates a new Mux Filesystem, if no Option funcs are provided,
 // New uses a default set of Option funcs. Any Option functions passed to this
 // function must check whether their fields are nil or not.
@@ -62,32 +71,22 @@ func New(ctx context.Context, cfgs []MuxConfig, opts ...Option) (*Mux, error) {
 			return nil, err
 		}
 	}
-	mux := &Mux{}
-	for _, cfg := range cfgs {
-		switch cfg.Type {
-		case "ipfs":
-			fs, err := qipfs.NewFilestore(cfg.Config)
-			if err != nil {
-				return nil, err
-			}
-			mux.handlers["ipfs"] = fs
-		case "local":
-			fs, err := localfs.NewFS(cfg.Config)
-			if err != nil {
-				return nil, err
-			}
-			mux.handlers["local"] = fs
-		case "http":
-			fs, err := httpfs.NewFS(cfg.Config)
-			if err != nil {
-				return nil, err
-			}
-			mux.handlers["http"] = fs
-		case "mem":
-		case "test":
-			mux.handlers["mem"] = qfs.NewMemFS()
-		}
+
+	mux := &Mux{
+		handlers: map[string]qfs.Filesystem{},
 	}
+	for _, cfg := range cfgs {
+		constructor, ok := constructors[cfg.Type]
+		if !ok {
+			return nil, fmt.Errorf("unrecognized filsystem type: %q", cfg.Type)
+		}
+		fs, err := constructor(cfg.Config)
+		if err != nil {
+			return nil, fmt.Errorf("constructing %q filesystem: %w", cfg.Type, err)
+		}
+		mux.handlers[cfg.Type] = fs
+	}
+
 	return mux, nil
 }
 
