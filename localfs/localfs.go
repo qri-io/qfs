@@ -19,7 +19,7 @@ type FSConfig struct {
 }
 
 // Option is a function type for passing to NewFS
-type Option func(cfg *FSConfig)
+type Option func(cfgMap *FSConfig)
 
 // OptionSetPWD sets the present working directory for the FS
 func OptionSetPWD(pwd string) Option {
@@ -48,8 +48,14 @@ func mapToConfig(cfgMap map[string]interface{}) (*FSConfig, error) {
 	return cfg, nil
 }
 
+// NewFilesystem creates a new local filesystem Pathresolver
+// with no options
+func NewFilesystem(cfgMap map[string]interface{}) (qfs.Filesystem, error) {
+	return NewFS(cfgMap)
+}
+
 // NewFS creates a new local filesytem PathResolver
-func NewFS(cfgMap map[string]interface{}, opts ...Option) (*FS, error) {
+func NewFS(cfgMap map[string]interface{}, opts ...Option) (qfs.Filesystem, error) {
 	cfg, err := mapToConfig(cfgMap)
 	if err != nil {
 		return nil, err

@@ -18,12 +18,6 @@ func init() {
 }
 
 func TestDefaultNewMux(t *testing.T) {
-	// create a mux that has an fs for
-	// ipfs
-	// httpfs
-	// localfs
-	// mem
-
 	path := filepath.Join(os.TempDir(), "muxfs_test")
 	if err := os.MkdirAll(path, os.ModePerm); err != nil {
 		t.Errorf("error creating temp dir: %s", err.Error())
@@ -149,7 +143,7 @@ func TestCAFSFromIPFS(t *testing.T) {
 	}
 
 	// create a mux with an ipfsFS
-	path := filepath.Join(os.TempDir(), "muxfs_test")
+	path := filepath.Join(os.TempDir(), "muxfs_test_cafs_from_ipfs")
 	if err := os.MkdirAll(path, os.ModePerm); err != nil {
 		t.Errorf("error creating temp dir: %s", err.Error())
 		return

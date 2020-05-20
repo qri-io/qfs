@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/ipfs/go-ipfs/core"
-	"github.com/ipfs/go-ipfs/pin/gc"
+	"github.com/ipfs/go-ipfs/gc"
 	"github.com/ipfs/go-ipfs/repo"
 
 	blocks "github.com/ipfs/go-block-format"

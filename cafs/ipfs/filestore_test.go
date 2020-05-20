@@ -24,7 +24,7 @@ func init() {
 	}
 }
 
-func TestFilestore(t *testing.T) {
+func TestFS(t *testing.T) {
 	path := filepath.Join(os.TempDir(), "ipfs_cafs_test")
 	if err := os.MkdirAll(path, os.ModePerm); err != nil {
 		t.Errorf("error creating temp dir: %s", err.Error())
@@ -37,7 +37,7 @@ func TestFilestore(t *testing.T) {
 		return
 	}
 
-	f, err := NewFilestore(nil, func(c *StoreCfg) {
+	f, err := NewFS(nil, func(c *StoreCfg) {
 		c.Online = false
 		c.FsRepoPath = path
 	})
@@ -46,13 +46,17 @@ func TestFilestore(t *testing.T) {
 		return
 	}
 
-	err = test.EnsureFilestoreBehavior(f)
+	cafs, ok := f.(cafs.Filestore)
+	if !ok {
+		t.Errorf("error, filesystem should be of type cafs.Filestore")
+	}
+	err = test.EnsureFilestoreBehavior(cafs)
 	if err != nil {
 		t.Errorf(err.Error())
 	}
 }
 
-func TestCreatedWithAPIAddrFilestore(t *testing.T) {
+func TestCreatedWithAPIAddrFS(t *testing.T) {
 	path := filepath.Join(os.TempDir(), "ipfs_cafs_test_api_addr")
 	if err := os.MkdirAll(path, os.ModePerm); err != nil {
 		t.Errorf("error creating temp dir: %s", err.Error())
@@ -67,7 +71,7 @@ func TestCreatedWithAPIAddrFilestore(t *testing.T) {
 	}
 
 	// create an ipfs fs with that repo
-	_, err := NewFilestore(nil, func(c *StoreCfg) {
+	_, err := NewFS(nil, func(c *StoreCfg) {
 		c.Online = false
 		c.FsRepoPath = path
 		c.EnableAPI = true
@@ -78,7 +82,7 @@ func TestCreatedWithAPIAddrFilestore(t *testing.T) {
 	}
 
 	// attempt to create another filestore using the same repo
-	if _, err := NewFilestore(nil, func(c *StoreCfg) {
+	if _, err := NewFS(nil, func(c *StoreCfg) {
 		c.Online = false
 		c.FsRepoPath = path
 	}); err == nil {
@@ -86,7 +90,7 @@ func TestCreatedWithAPIAddrFilestore(t *testing.T) {
 	}
 
 	// create another filestore, but with a fallback api address
-	cafs, err := NewFilestore(nil, func(c *StoreCfg) {
+	cafs, err := NewFS(nil, func(c *StoreCfg) {
 		c.Online = false
 		c.FsRepoPath = path
 		c.APIAddr = "127.0.0.1:5001/api/v0/swarm/peers"
@@ -117,7 +121,7 @@ func BenchmarkRead(b *testing.B) {
 		defer os.RemoveAll(path)
 	}
 
-	f, err := NewFilestore(nil, func(c *StoreCfg) {
+	f, err := NewFS(nil, func(c *StoreCfg) {
 		c.Online = false
 		c.FsRepoPath = path
 	})

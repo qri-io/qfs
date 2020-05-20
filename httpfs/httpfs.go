@@ -46,8 +46,13 @@ func mapToConfig(cfgMap map[string]interface{}) (*FSConfig, error) {
 	return cfg, nil
 }
 
+// NewFilesystem creates a new http filesystem PathResolver
+func NewFilesystem(cfgMap map[string]interface{}) (qfs.Filesystem, error) {
+	return NewFS(cfgMap)
+}
+
 // NewFS creates a new local filesytem PathResolver
-func NewFS(cfgMap map[string]interface{}, opts ...Option) (*FS, error) {
+func NewFS(cfgMap map[string]interface{}, opts ...Option) (qfs.Filesystem, error) {
 	cfg, err := mapToConfig(cfgMap)
 	if err != nil {
 		return nil, err

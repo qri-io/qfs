@@ -12,6 +12,13 @@ import (
 	"github.com/multiformats/go-multihash"
 )
 
+// NewMemFilesystem allocates an instace of a mapstore that
+// can be used as a PathResolver
+// satisfies the FSConstructor interface
+func NewMemFilesystem(cfg map[string]interface{}) (Filesystem, error) {
+	return NewMemFS(), nil
+}
+
 // NewMemFS allocates an instance of a mapstore
 func NewMemFS() *MapStore {
 	return &MapStore{

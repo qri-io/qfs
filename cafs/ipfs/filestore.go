@@ -45,7 +45,14 @@ func (fst Filestore) PathPrefix() string {
 	return prefix
 }
 
-func NewFilestore(cfgMap map[string]interface{}, config ...Option) (cafs.Filestore, error) {
+// NewFilesystem creates a new local filesystem PathResolver
+// with no options
+func NewFilesystem(cfgMap map[string]interface{}) (qfs.Filesystem, error) {
+	return NewFS(cfgMap)
+}
+
+// NewFS creates a new local filesystem PathResolver
+func NewFS(cfgMap map[string]interface{}, config ...Option) (qfs.Filesystem, error) {
 	cfg, err := mapToConfig(cfgMap)
 	if err != nil {
 		return nil, err
@@ -76,11 +83,7 @@ func NewFilestore(cfgMap map[string]interface{}, config ...Option) (cafs.Filesto
 		if cfg.APIAddr != "" && err == errRepoLock {
 			// if we cannot get a repo, and we have a fallback APIAdder
 			// attempt to create and return an `ipfs_http` filesystem istead
-			fs, err := ipfs_http.NewFS(map[string]interface{}{"ipfsApiUrl": cfg.APIAddr})
-			if err != nil {
-				return nil, err
-			}
-			return fs, nil
+			return ipfs_http.NewFilesystem(map[string]interface{}{"ipfsApiUrl": cfg.APIAddr})
 		}
 		return nil, err
 	}

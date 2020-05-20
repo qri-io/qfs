@@ -6,9 +6,9 @@ import (
 
 	"github.com/qri-io/qfs"
 	"github.com/qri-io/qfs/cafs"
-	// qipfs "github.com/qri-io/qfs/cafs/ipfs"
-	// "github.com/qri-io/qfs/httpfs"
-	// "github.com/qri-io/qfs/localfs"
+	qipfs "github.com/qri-io/qfs/cafs/ipfs"
+	"github.com/qri-io/qfs/httpfs"
+	"github.com/qri-io/qfs/localfs"
 )
 
 // NewMux creates a new path muxer
@@ -46,11 +46,10 @@ type MuxConfig struct {
 
 // constructors maps filesystem type strings to constructor functions
 var constructors = map[string]qfs.FSConstructor{
-	// TODO (ramfox) - adapt each subsystem to the FSConstructor signature
-	// "ipfs":  qipfs.NewFilestore,
-	// "local": localfs.NewFS,
-	// "http":  httpfs.NewFS,
-	// "mem":   qfs.NewMemFS,
+	"ipfs":  qipfs.NewFilesystem,
+	"local": localfs.NewFilesystem,
+	"http":  httpfs.NewFilesystem,
+	"mem":   qfs.NewMemFilesystem,
 }
 
 // New creates a new Mux Filesystem, if no Option funcs are provided,
@@ -71,7 +70,6 @@ func New(ctx context.Context, cfgs []MuxConfig, opts ...Option) (*Mux, error) {
 			return nil, err
 		}
 	}
-
 	mux := &Mux{
 		handlers: map[string]qfs.Filesystem{},
 	}
@@ -86,7 +84,6 @@ func New(ctx context.Context, cfgs []MuxConfig, opts ...Option) (*Mux, error) {
 		}
 		mux.handlers[cfg.Type] = fs
 	}
-
 	return mux, nil
 }
 
@@ -155,7 +152,6 @@ func OptSetIPFSPath(path string) Option {
 			newO := append(*o, *ipfs)
 			*o = newO
 		}
-		fmt.Println(o)
 		return nil
 	}
 }

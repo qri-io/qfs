@@ -47,8 +47,9 @@ func mapToConfig(cfgMap map[string]interface{}) (*FSConfig, error) {
 	return cfg, nil
 }
 
-// NewFS creates a new ipfs http resolver
-func NewFS(cfgMap map[string]interface{}) (*Filestore, error) {
+// NewFilesystem creates a new ipfs http path resolver
+// from a config map with no options
+func NewFilesystem(cfgMap map[string]interface{}) (cafs.Filestore, error) {
 	cfg, err := mapToConfig(cfgMap)
 	if err != nil {
 		return nil, err
