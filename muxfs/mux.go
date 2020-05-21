@@ -40,7 +40,7 @@ type Option func(o *[]MuxConfig) error
 // MuxConfig contains the information needed to create a new filesystem
 type MuxConfig struct {
 	Type   string                 `json:"type"`
-	Config map[string]interface{} `json:"options,omitempty"`
+	Config map[string]interface{} `json:"config,omitempty"`
 	Source string                 `json:"source,omitempty"`
 }
 
@@ -58,11 +58,6 @@ var constructors = map[string]qfs.FSConstructor{
 func New(ctx context.Context, cfgs []MuxConfig, opts ...Option) (*Mux, error) {
 	if cfgs == nil {
 		return nil, fmt.Errorf("config is required")
-	}
-
-	if len(opts) == 0 {
-		// default to a standard composition of Option funcs
-		opts = []Option{}
 	}
 
 	for _, opt := range opts {
@@ -130,7 +125,7 @@ func (m Mux) Delete(ctx context.Context, path string) (err error) {
 	return handler.Delete(ctx, path)
 }
 
-// OptSetIPFSPath allows you to set an ipfs for the
+// OptSetIPFSPath allows you to set an ipfs path for the ipfs filesystem
 func OptSetIPFSPath(path string) Option {
 	return func(o *[]MuxConfig) error {
 		if o == nil {
@@ -149,8 +144,7 @@ func OptSetIPFSPath(path string) Option {
 		ipfs.Config["fsRepoPath"] = path
 		if ipfs.Type == "" {
 			ipfs.Type = "ipfs"
-			newO := append(*o, *ipfs)
-			*o = newO
+			*o = append(*o, *ipfs)
 		}
 		return nil
 	}

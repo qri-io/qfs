@@ -8,7 +8,6 @@ import (
 
 	"github.com/ipfs/go-ipfs/core"
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
-	"github.com/mitchellh/go-homedir"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -24,7 +23,7 @@ type StoreCfg struct {
 	Ctx context.Context
 	// EnableAPI
 	EnableAPI bool
-	// ApiAddr is an ipfs http api address, used as a fallback if we cannot
+	// APIAddr is an ipfs http api address, used as a fallback if we cannot
 	// config an ipfs filesystem. The filesystem will instead be a `ipfs_http`
 	// filesystem.
 	APIAddr string
@@ -116,23 +115,19 @@ func (cfg *StoreCfg) InitRepo(ctx context.Context) error {
 	return nil
 }
 
-// MoveIPFSRepoOnToQriPath moves the ipfs repo from wherever it is,
-// indicated by the store config, to live on the QRI_PATH
-func MoveIPFSRepoOnToQriPath(o *StoreCfg) error {
-	qriRepoPath := os.Getenv("QRI_PATH")
-	if qriRepoPath == "" {
-		home, err := homedir.Dir()
-		if err != nil {
-			panic(err)
-		}
-		qriRepoPath = filepath.Join(home, ".qri")
+// MoveIPFSRepoOntoPath moves the ipfs repo from wherever it is,
+// indicated by the store config, to live on the given path
+// this changes the path in the given config struct
+func MoveIPFSRepoOntoPath(o *StoreCfg, path string) error {
+	if path == "" {
+		return fmt.Errorf("need a path onto which the ipfs repo should be moved")
 	}
-	newIPFSPath := filepath.Join(qriRepoPath, filepath.Base(o.FsRepoPath))
+
+	newIPFSPath := filepath.Join(path, filepath.Base(o.FsRepoPath))
 
 	if err := os.Rename(o.FsRepoPath, newIPFSPath); err != nil {
 		return err
 	}
-	// this should really do some update config action
 	o.FsRepoPath = newIPFSPath
 	return nil
 }

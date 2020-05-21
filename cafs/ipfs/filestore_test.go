@@ -99,7 +99,7 @@ func TestCreatedWithAPIAddrFS(t *testing.T) {
 		t.Errorf("error creating ipfs_http filesystem: %s", err)
 	}
 	if _, ok := cafs.(*ipfs_http.Filestore); !ok {
-		t.Errorf("returned filesystem is not of expected type `ipft_http`")
+		t.Errorf("returned filesystem is not of expected type `ipfs_http`")
 	}
 }
 

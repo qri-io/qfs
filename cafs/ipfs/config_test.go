@@ -8,7 +8,7 @@ import (
 
 func TestMoveIPFSRepoOnToQriPath(t *testing.T) {
 	path := filepath.Join(os.TempDir(), "ipfs_repo_move_test")
-	if err := os.MkdirAll(path, os.ModePerm); err != nil {
+	if err := os.MkdirAll(path, 0755); err != nil {
 		t.Errorf("error creating temp dir: %s", err.Error())
 		return
 	}
@@ -17,18 +17,12 @@ func TestMoveIPFSRepoOnToQriPath(t *testing.T) {
 	qriPath := filepath.Join(path, ".qri")
 	ipfsPath := filepath.Join(path, ".ipfs")
 
-	if err := os.MkdirAll(qriPath, os.ModePerm); err != nil {
+	if err := os.MkdirAll(qriPath, 0755); err != nil {
 		t.Errorf("error creating temp qri dir: %s", err.Error())
 		return
 	}
-	if err := os.MkdirAll(ipfsPath, os.ModePerm); err != nil {
+	if err := os.MkdirAll(ipfsPath, 0755); err != nil {
 		t.Errorf("error creating temp ipfs dir: %s", err.Error())
-		return
-	}
-
-	err := os.Setenv("QRI_PATH", qriPath)
-	if err != nil {
-		t.Errorf("failed to set up QRI_PATH: %s", err.Error())
 		return
 	}
 
@@ -45,8 +39,8 @@ func TestMoveIPFSRepoOnToQriPath(t *testing.T) {
 		return
 	}
 
-	if err := MoveIPFSRepoOnToQriPath(cfg); err != nil {
-		t.Errorf("MoveIPFSRepoOnToQriPath error: %s", err)
+	if err := MoveIPFSRepoOntoPath(cfg, qriPath); err != nil {
+		t.Errorf("MoveIPFSRepoOntoPath error: %s", err)
 		return
 	}
 
