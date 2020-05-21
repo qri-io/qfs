@@ -3,9 +3,12 @@ package ipfs_filestore
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/ipfs/go-ipfs/core"
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
+	"github.com/mitchellh/mapstructure"
 )
 
 // StoreCfg configures the datastore
@@ -20,16 +23,34 @@ type StoreCfg struct {
 	Ctx context.Context
 	// EnableAPI
 	EnableAPI bool
+	// APIAddr is an ipfs http api address, used as a fallback if we cannot
+	// config an ipfs filesystem. The filesystem will instead be a `ipfs_http`
+	// filesystem.
+	APIAddr string
+}
+
+func mapToConfig(cfgmap map[string]interface{}) (*StoreCfg, error) {
+	if cfgmap == nil {
+		return DefaultConfig(""), nil
+	}
+	cfg := &StoreCfg{}
+	if err := mapstructure.Decode(cfgmap, cfg); err != nil {
+		return nil, err
+	}
+	if cfg.Ctx == nil {
+		cfg.Ctx = context.Background()
+	}
+	return cfg, nil
 }
 
 // DefaultConfig results in a local node that
 // attempts to draw from the default ipfs filesotre location
-func DefaultConfig() *StoreCfg {
+func DefaultConfig(path string) *StoreCfg {
 	return &StoreCfg{
 		BuildCfg: core.BuildCfg{
 			Online: false,
 		},
-		FsRepoPath: "~/.ipfs",
+		FsRepoPath: path,
 		Ctx:        context.Background(),
 	}
 }
@@ -73,6 +94,11 @@ func (cfg *StoreCfg) InitRepo(ctx context.Context) error {
 		return nil
 	}
 	if cfg.FsRepoPath != "" {
+		if daemonLocked, err := fsrepo.LockedByOtherProcess(cfg.FsRepoPath); err != nil {
+			return err
+		} else if daemonLocked {
+			return errRepoLock
+		}
 		localRepo, err := fsrepo.Open(cfg.FsRepoPath)
 		if err != nil {
 			if err == fsrepo.ErrNeedMigration {
@@ -86,5 +112,22 @@ func (cfg *StoreCfg) InitRepo(ctx context.Context) error {
 		}()
 		cfg.Repo = localRepo
 	}
+	return nil
+}
+
+// MoveIPFSRepoOntoPath moves the ipfs repo from wherever it is,
+// indicated by the store config, to live on the given path
+// this changes the path in the given config struct
+func MoveIPFSRepoOntoPath(o *StoreCfg, path string) error {
+	if path == "" {
+		return fmt.Errorf("need a path onto which the ipfs repo should be moved")
+	}
+
+	newIPFSPath := filepath.Join(path, filepath.Base(o.FsRepoPath))
+
+	if err := os.Rename(o.FsRepoPath, newIPFSPath); err != nil {
+		return err
+	}
+	o.FsRepoPath = newIPFSPath
 	return nil
 }

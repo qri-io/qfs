@@ -37,6 +37,9 @@ type Filesystem interface {
 	Delete(ctx context.Context, path string) (err error)
 }
 
+// FSConstructor is a function that creates a filesystem from a config map
+type FSConstructor func(cfg map[string]interface{}) (Filesystem, error)
+
 // Destroyer is an optional interface to tear down a filesystem, removing all
 // persisted resources
 type Destroyer interface {
@@ -80,8 +83,8 @@ func PathKind(path string) string {
 		return "http"
 	} else if strings.HasPrefix(path, "/ipfs") {
 		return "ipfs"
-	} else if strings.HasPrefix(path, "/map") || strings.HasPrefix(path, "/cafs") {
-		return "cafs"
+	} else if strings.HasPrefix(path, "/map") || strings.HasPrefix(path, "/mem") {
+		return "mem"
 	}
 	return "local"
 }

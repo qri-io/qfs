@@ -9,6 +9,7 @@ import (
 	logging "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	path "github.com/ipfs/interface-go-ipfs-core/path"
+	"github.com/mitchellh/mapstructure"
 
 	// httpapi "github.com/qri-io/ipfs-core-http"
 	httpapi "github.com/ipfs/go-ipfs-http-client"
@@ -25,12 +26,35 @@ type Filestore struct {
 	capi coreiface.CoreAPI
 }
 
+// FSConfig adjusts the behaviour of an FS instance
+type FSConfig struct {
+	IpfsApiUrl string // url to the ipfs api
+}
+
 func (fst Filestore) PathPrefix() string {
 	return prefix
 }
 
-func New(ipfsApiURL string) (*Filestore, error) {
-	cli, err := httpapi.NewURLApiWithClient(ipfsApiURL, http.DefaultClient)
+// if no cfgMap is given, return the default config
+func mapToConfig(cfgMap map[string]interface{}) (*FSConfig, error) {
+	if cfgMap == nil {
+		return nil, fmt.Errorf("config with ipfs api url required for ipfs_http")
+	}
+	cfg := &FSConfig{}
+	if err := mapstructure.Decode(cfgMap, cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// NewFilesystem creates a new ipfs http path resolver
+// from a config map with no options
+func NewFilesystem(cfgMap map[string]interface{}) (cafs.Filestore, error) {
+	cfg, err := mapToConfig(cfgMap)
+	if err != nil {
+		return nil, err
+	}
+	cli, err := httpapi.NewURLApiWithClient(cfg.IpfsApiUrl, http.DefaultClient)
 	if err != nil {
 		return nil, err
 	}

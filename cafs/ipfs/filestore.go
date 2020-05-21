@@ -2,6 +2,7 @@ package ipfs_filestore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	// but I'd like a test before we do that. We may also want to consider switching
 	// Qri to writing IPLD. Lots to think about.
 	coreunix "github.com/qri-io/qfs/cafs/ipfs/coreunix"
+	"github.com/qri-io/qfs/cafs/ipfs_http"
 
 	"github.com/ipfs/go-cid"
 	core "github.com/ipfs/go-ipfs/core"
@@ -30,6 +32,9 @@ var log = logging.Logger("cafs/ipfs")
 
 const prefix = "ipfs"
 
+// ErrNoRepoPath is returned when no repo path is provided in the config
+var ErrNoRepoPath = errors.New("must provide a repo path ('fsRepoPath') to initialize an ipfs filesystem")
+
 type Filestore struct {
 	cfg  *StoreCfg
 	node *core.IpfsNode
@@ -40,8 +45,19 @@ func (fst Filestore) PathPrefix() string {
 	return prefix
 }
 
-func NewFilestore(config ...Option) (*Filestore, error) {
-	cfg := DefaultConfig()
+// NewFilesystem creates a new local filesystem PathResolver
+// with no options
+func NewFilesystem(cfgMap map[string]interface{}) (qfs.Filesystem, error) {
+	return NewFS(cfgMap)
+}
+
+// NewFS creates a new local filesystem PathResolver
+func NewFS(cfgMap map[string]interface{}, config ...Option) (qfs.Filesystem, error) {
+	cfg, err := mapToConfig(cfgMap)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, option := range config {
 		option(cfg)
 	}
@@ -59,7 +75,16 @@ func NewFilestore(config ...Option) (*Filestore, error) {
 		}, nil
 	}
 
+	if cfg.FsRepoPath == "" {
+		return nil, ErrNoRepoPath
+	}
+
 	if err := cfg.InitRepo(cfg.Ctx); err != nil {
+		if cfg.APIAddr != "" && err == errRepoLock {
+			// if we cannot get a repo, and we have a fallback APIAdder
+			// attempt to create and return an `ipfs_http` filesystem istead
+			return ipfs_http.NewFilesystem(map[string]interface{}{"ipfsApiUrl": cfg.APIAddr})
+		}
 		return nil, err
 	}
 

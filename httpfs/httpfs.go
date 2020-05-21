@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/qri-io/qfs"
 )
 
@@ -33,14 +34,35 @@ func DefaultFSConfig() *FSConfig {
 	}
 }
 
+// if no cfgmap is given, return the default config
+func mapToConfig(cfgMap map[string]interface{}) (*FSConfig, error) {
+	if cfgMap == nil {
+		return DefaultFSConfig(), nil
+	}
+	cfg := &FSConfig{}
+	if err := mapstructure.Decode(cfgMap, cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// NewFilesystem creates a new http filesystem PathResolver
+func NewFilesystem(cfgMap map[string]interface{}) (qfs.Filesystem, error) {
+	return NewFS(cfgMap)
+}
+
 // NewFS creates a new local filesytem PathResolver
-func NewFS(opts ...Option) *FS {
-	cfg := DefaultFSConfig()
+func NewFS(cfgMap map[string]interface{}, opts ...Option) (qfs.Filesystem, error) {
+	cfg, err := mapToConfig(cfgMap)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, opt := range opts {
 		opt(cfg)
 	}
 
-	return &FS{cfg: cfg}
+	return &FS{cfg: cfg}, nil
 }
 
 // FS is a implementation of qfs.PathResolver that uses the local filesystem
