@@ -42,17 +42,17 @@ func TestDefaultNewMux(t *testing.T) {
 		t.Errorf("error creating new mux: %s", err)
 		return
 	}
-	if _, ok := mfs.handlers["ipfs"]; !ok {
-		t.Errorf("expected 'ipfs' filesystem, got none")
+	if _, err := GetResolver(mfs, "ipfs"); err != nil {
+		t.Errorf(err.Error())
 	}
-	if _, ok := mfs.handlers["http"]; !ok {
-		t.Errorf("expected 'http' filesystem, got none")
+	if _, err := GetResolver(mfs, "http"); err != nil {
+		t.Errorf(err.Error())
 	}
-	if _, ok := mfs.handlers["local"]; !ok {
-		t.Errorf("expected 'local' filesystem, got none")
+	if _, err := GetResolver(mfs, "local"); err != nil {
+		t.Errorf(err.Error())
 	}
-	if _, ok := mfs.handlers["mem"]; !ok {
-		t.Errorf("expected 'mem' filesystem, got none")
+	if _, err := GetResolver(mfs, "mem"); err != nil {
+		t.Errorf(err.Error())
 	}
 }
 
