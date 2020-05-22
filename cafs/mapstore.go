@@ -21,6 +21,11 @@ func NewMapstore() *MapStore {
 	}
 }
 
+// NewMapFilesystem satisfies the qfs.FSConstructor interface
+func NewMapFilesystem(ctgMap map[string]interface{}) (qfs.Filesystem, error) {
+	return NewMapstore(), nil
+}
+
 // MapStore implements Filestore in-memory as a map
 //
 // An example pulled from tests will create a tree of "cafs"

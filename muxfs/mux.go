@@ -57,6 +57,7 @@ var constructors = map[string]qfs.FSConstructor{
 	"local": localfs.NewFilesystem,
 	"http":  httpfs.NewFilesystem,
 	"mem":   qfs.NewMemFilesystem,
+	"map":   cafs.NewMapFilesystem,
 }
 
 // New creates a new Mux Filesystem, if no Option funcs are provided,
@@ -78,7 +79,7 @@ func New(ctx context.Context, cfgs []MuxConfig, opts ...Option) (*Mux, error) {
 	for _, cfg := range cfgs {
 		constructor, ok := constructors[cfg.Type]
 		if !ok {
-			return nil, fmt.Errorf("unrecognized filsystem type: %q", cfg.Type)
+			return nil, fmt.Errorf("unrecognized filesystem type: %q", cfg.Type)
 		}
 		fs, err := constructor(cfg.Config)
 		if err != nil {

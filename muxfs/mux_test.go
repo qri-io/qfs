@@ -36,6 +36,7 @@ func TestDefaultNewMux(t *testing.T) {
 		{Type: "http"},
 		{Type: "local"},
 		{Type: "mem"},
+		{Type: "map"},
 	}
 	mfs, err := New(ctx, cfg)
 	if err != nil {
@@ -52,6 +53,9 @@ func TestDefaultNewMux(t *testing.T) {
 		t.Errorf(err.Error())
 	}
 	if _, err := GetResolver(mfs, "mem"); err != nil {
+		t.Errorf(err.Error())
+	}
+	if _, err := GetResolver(mfs, "map"); err != nil {
 		t.Errorf(err.Error())
 	}
 }
