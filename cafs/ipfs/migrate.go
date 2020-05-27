@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 
+	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
 	migrate "github.com/ipfs/go-ipfs/repo/fsrepo/migrations"
 	"github.com/otiai10/copy"
 )
@@ -23,11 +24,15 @@ func RunMigrations(ipfsRepoPath, newRepoPath string) error {
 	// ipfs directory
 	tmpDir, err := ioutil.TempDir(os.TempDir(), "ipfs_temp")
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating temp directory: %s", err)
 	}
+
 	rollback := func() {
-		os.RemoveAll(newRepoPath)
+		if ipfsRepoPath != newRepoPath {
+			os.RemoveAll(newRepoPath)
+		}
 	}
+
 	defer func() {
 		os.RemoveAll(tmpDir)
 		if rollback != nil {
@@ -37,20 +42,26 @@ func RunMigrations(ipfsRepoPath, newRepoPath string) error {
 
 	err = copy.Copy(ipfsRepoPath, tmpDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("error backing up ipfs repo: %s", err)
+	}
+
+	os.Setenv("IPFS_PATH", tmpDir)
+	if err := Migrate(); err != nil {
+		return fmt.Errorf("error migrating ipfs repo: %s", err)
 	}
 
 	err = MoveIPFSRepoOntoPath(tmpDir, newRepoPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("error moving repo onto new path: %s", err)
 	}
-	rollback = nil
+
+	rollback = nil  
 	return nil
 }
 
 // Migrate runs an IPFS fsrepo migration
-func Migrate(prevVersion, newVersion int) error {
-	err := migrate.RunMigration(newVersion)
+func Migrate() error {
+	err := migrate.RunMigration(fsrepo.RepoVersion)
 	if err != nil {
 		fmt.Println("The migrations of fs-repo failed:")
 		fmt.Printf("  %s\n", err)

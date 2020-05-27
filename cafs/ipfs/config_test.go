@@ -26,10 +26,6 @@ func TestMoveIPFSRepoOnToQriPath(t *testing.T) {
 		return
 	}
 
-	cfg := &StoreCfg{
-		FsRepoPath: ipfsPath,
-	}
-
 	if _, err := os.Stat(qriPath); os.IsNotExist(err) {
 		t.Errorf("error: qriPath directory was not created")
 		return
@@ -39,7 +35,9 @@ func TestMoveIPFSRepoOnToQriPath(t *testing.T) {
 		return
 	}
 
-	if err := MoveIPFSRepoOntoPath(cfg, qriPath); err != nil {
+	newIpfsPath := filepath.Join(qriPath, ".ipfs")
+
+	if err := MoveIPFSRepoOntoPath(ipfsPath, newIpfsPath); err != nil {
 		t.Errorf("MoveIPFSRepoOntoPath error: %s", err)
 		return
 	}
@@ -52,10 +50,6 @@ func TestMoveIPFSRepoOnToQriPath(t *testing.T) {
 
 	if _, err := os.Stat(newIPFSPath); os.IsNotExist(err) {
 		t.Errorf("IPFS repo was not moved onto the new IPFS path: %s", newIPFSPath)
-		return
-	}
-	if cfg.FsRepoPath != newIPFSPath {
-		t.Errorf("FsRepoPath in Store Config object was not changed")
 		return
 	}
 }
