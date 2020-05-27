@@ -33,6 +33,13 @@ func (m *Mux) SetHandler(pathKind string, resolver qfs.Filesystem) {
 	m.handlers[pathKind] = resolver
 }
 
+// GetHandler returns the resolver for a given path kind string and a bool
+// if the resolver exists on the muxfs
+func (m *Mux) GetHandler(pathKind string) (qfs.Filesystem, bool) {
+	resolver, ok := m.handlers[pathKind]
+	return resolver, ok
+}
+
 // Option is a function that manipulates config details when fed to New(). Fields on
 // the o parameter may be null, functions cannot assume the Config is non-null.
 type Option func(o *[]MuxConfig) error
@@ -50,6 +57,7 @@ var constructors = map[string]qfs.FSConstructor{
 	"local": localfs.NewFilesystem,
 	"http":  httpfs.NewFilesystem,
 	"mem":   qfs.NewMemFilesystem,
+	"map":   cafs.NewMapFilesystem,
 }
 
 // New creates a new Mux Filesystem, if no Option funcs are provided,
@@ -71,7 +79,7 @@ func New(ctx context.Context, cfgs []MuxConfig, opts ...Option) (*Mux, error) {
 	for _, cfg := range cfgs {
 		constructor, ok := constructors[cfg.Type]
 		if !ok {
-			return nil, fmt.Errorf("unrecognized filsystem type: %q", cfg.Type)
+			return nil, fmt.Errorf("unrecognized filesystem type: %q", cfg.Type)
 		}
 		fs, err := constructor(cfg.Config)
 		if err != nil {
@@ -158,4 +166,18 @@ func (m *Mux) CAFSStoreFromIPFS() cafs.Filestore {
 		return nil
 	}
 	return ipfsFS.(cafs.Filestore)
+}
+
+// GetResolver returns a resolver of a certain kind from a qfs.Filesystem if
+// that filesystem is a muxfs
+func GetResolver(fs qfs.Filesystem, pathKind string) (qfs.Filesystem, error) {
+	m, ok := fs.(*Mux)
+	if !ok {
+		return nil, fmt.Errorf("file system is not a mux filesystem and does not have multiple resolvers")
+	}
+	resolver, ok := m.GetHandler(pathKind)
+	if !ok {
+		return nil, fmt.Errorf("resolver of kind '%s' does not exist on this filesystem", pathKind)
+	}
+	return resolver, nil
 }

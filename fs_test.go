@@ -56,7 +56,8 @@ func TestPathKind(t *testing.T) {
 		{"/path/to/location", "local"},
 		{"/", "local"},
 		{"/ipfs/Qmfoo", "ipfs"},
-		{"/map/Qmfoo", "mem"},
+		{"/mem/Qmfoo", "mem"},
+		{"/map/Qmfoo", "map"},
 	}
 
 	for i, c := range cases {

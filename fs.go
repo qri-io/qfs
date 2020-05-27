@@ -83,8 +83,10 @@ func PathKind(path string) string {
 		return "http"
 	} else if strings.HasPrefix(path, "/ipfs") {
 		return "ipfs"
-	} else if strings.HasPrefix(path, "/map") || strings.HasPrefix(path, "/mem") {
+	} else if strings.HasPrefix(path, "/mem") {
 		return "mem"
+	} else if strings.HasPrefix(path, "/map") {
+		return "map"
 	}
 	return "local"
 }
