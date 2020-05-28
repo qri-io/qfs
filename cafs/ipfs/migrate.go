@@ -40,18 +40,20 @@ func RunMigrations(ipfsRepoPath, newRepoPath string) error {
 		}
 	}()
 
+	// make a back up of the ipfs repo
 	err = copy.Copy(ipfsRepoPath, tmpDir)
 	if err != nil {
 		return fmt.Errorf("error backing up ipfs repo: %s", err)
 	}
 
+	// migrate the copied ipfs repo
 	os.Setenv("IPFS_PATH", tmpDir)
 	if err := Migrate(); err != nil {
 		return fmt.Errorf("error migrating ipfs repo: %s", err)
 	}
 
-	err = MoveIPFSRepoOntoPath(tmpDir, newRepoPath)
-	if err != nil {
+	// move migrated repo to new location
+	if err := os.Rename(tmpDir, newRepoPath); err != nil {
 		return fmt.Errorf("error moving repo onto new path: %s", err)
 	}
 

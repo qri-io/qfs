@@ -3,7 +3,6 @@ package ipfs_filestore
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/ipfs/go-ipfs/core"
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
@@ -114,19 +113,3 @@ func (cfg *StoreCfg) InitRepo(ctx context.Context) error {
 	return nil
 }
 
-// MoveIPFSRepoOntoPath moves the ipfs repo from wherever it is,
-// indicated by the store config, to live on the given path
-// this changes the path in the given config struct
-func MoveIPFSRepoOntoPath(repoPath, newPath string) error {
-	if repoPath == "" {
-		return fmt.Errorf("need the path to the ipfs repo")
-	}
-	if newPath == "" {
-		return fmt.Errorf("need a path onto which the ipfs repo should be moved")
-	}
-
-	if err := os.Rename(repoPath, newPath); err != nil {
-		return err
-	}
-	return nil
-}
