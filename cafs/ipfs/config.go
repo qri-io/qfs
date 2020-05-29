@@ -17,8 +17,6 @@ type StoreCfg struct {
 	Node *core.IpfsNode
 	// path to a local filesystem fs repo
 	FsRepoPath string
-	// operating context
-	Ctx context.Context
 	// EnableAPI
 	EnableAPI bool
 	// APIAddr is an ipfs http api address, used as a fallback if we cannot
@@ -35,9 +33,6 @@ func mapToConfig(cfgmap map[string]interface{}) (*StoreCfg, error) {
 	if err := mapstructure.Decode(cfgmap, cfg); err != nil {
 		return nil, err
 	}
-	if cfg.Ctx == nil {
-		cfg.Ctx = context.Background()
-	}
 	return cfg, nil
 }
 
@@ -49,7 +44,6 @@ func DefaultConfig(path string) *StoreCfg {
 			Online: false,
 		},
 		FsRepoPath: path,
-		Ctx:        context.Background(),
 	}
 }
 
@@ -84,32 +78,34 @@ func OptsFromMap(opts map[string]interface{}) Option {
 	}
 }
 
-func (cfg *StoreCfg) InitRepo(ctx context.Context) error {
+func (cfg *StoreCfg) OpenRepo(ctx context.Context) (chan struct{}, error) {
+	doneCh := make(chan struct{})
 	if cfg.NilRepo {
-		return nil
+		return doneCh, nil
 	}
 	if cfg.Repo != nil {
-		return nil
+		return doneCh, nil
 	}
 	if cfg.FsRepoPath != "" {
 		if daemonLocked, err := fsrepo.LockedByOtherProcess(cfg.FsRepoPath); err != nil {
-			return err
+			return doneCh, err
 		} else if daemonLocked {
-			return errRepoLock
+			return doneCh, errRepoLock
 		}
 		localRepo, err := fsrepo.Open(cfg.FsRepoPath)
 		if err != nil {
 			if err == fsrepo.ErrNeedMigration {
-				return ErrNeedMigration
+				return doneCh, ErrNeedMigration
 			}
-			return fmt.Errorf("error opening local filestore ipfs repository: %w", err)
+			return doneCh, fmt.Errorf("error opening local filestore ipfs repository: %w", err)
 		}
+
 		go func() {
 			<-ctx.Done()
 			localRepo.Close()
+			doneCh <- struct{}{}
 		}()
 		cfg.Repo = localRepo
 	}
-	return nil
+	return doneCh, nil
 }
-

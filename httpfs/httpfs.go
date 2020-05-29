@@ -47,7 +47,7 @@ func mapToConfig(cfgMap map[string]interface{}) (*FSConfig, error) {
 }
 
 // NewFilesystem creates a new http filesystem PathResolver
-func NewFilesystem(cfgMap map[string]interface{}) (qfs.Filesystem, error) {
+func NewFilesystem(_ context.Context, cfgMap map[string]interface{}) (qfs.Filesystem, error) {
 	return NewFS(cfgMap)
 }
 

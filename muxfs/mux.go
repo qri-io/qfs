@@ -3,6 +3,7 @@ package muxfs
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/qri-io/qfs"
 	"github.com/qri-io/qfs/cafs"
@@ -19,7 +20,9 @@ func NewMux(handlers map[string]qfs.Filesystem) *Mux {
 // Mux multiplexes together multiple filesystems using path multiplexing.
 // It's a way to use multiple filesystem implementations as a single FS
 type Mux struct {
-	handlers map[string]qfs.Filesystem
+	handlers  map[string]qfs.Filesystem
+	doneCh    chan struct{}
+	releasers sync.WaitGroup
 }
 
 // compile-time assertion that MapStore satisfies the Filesystem interface
@@ -75,19 +78,39 @@ func New(ctx context.Context, cfgs []MuxConfig, opts ...Option) (*Mux, error) {
 	}
 	mux := &Mux{
 		handlers: map[string]qfs.Filesystem{},
+		doneCh:   make(chan struct{}),
 	}
 	for _, cfg := range cfgs {
 		constructor, ok := constructors[cfg.Type]
 		if !ok {
 			return nil, fmt.Errorf("unrecognized filesystem type: %q", cfg.Type)
 		}
-		fs, err := constructor(cfg.Config)
+		fs, err := constructor(ctx, cfg.Config)
 		if err != nil {
 			return nil, fmt.Errorf("constructing %q filesystem: %w", cfg.Type, err)
 		}
 		mux.handlers[cfg.Type] = fs
+
+		if releaser, ok := fs.(qfs.ReleasingFilesystem); ok {
+			mux.releasers.Add(1)
+			go func(releaser qfs.ReleasingFilesystem) {
+				<-releaser.Done()
+				mux.releasers.Done()
+			}(releaser)
+		}
 	}
+
+	go func() {
+		mux.releasers.Wait()
+		mux.doneCh <- struct{}{}
+	}()
+
 	return mux, nil
+}
+
+// Done implements the qfs.ReleasingFilesystem interface
+func (m *Mux) Done() chan struct{} {
+	return m.doneCh
 }
 
 func noMuxerError(kind, path string) error {

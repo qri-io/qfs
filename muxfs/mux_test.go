@@ -2,10 +2,12 @@ package muxfs
 
 import (
 	"context"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/qri-io/qfs"
 	qipfs "github.com/qri-io/qfs/cafs/ipfs"
 )
 
@@ -172,5 +174,64 @@ func TestCAFSFromIPFS(t *testing.T) {
 	if ipfsFS == nil {
 		t.Errorf("expected ipfsFS to exist, got nil")
 		return
+	}
+}
+
+func TestRepoLockPerContext(t *testing.T) {
+	dir, _ := ioutil.TempDir("", "lock_drop_test")
+	if err := qipfs.InitRepo(dir, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := []MuxConfig{
+		{
+			Type: "ipfs",
+			Config: map[string]interface{}{
+				"fsRepoPath": dir,
+			},
+		},
+	}
+
+	// create a context for the lifespan of the filesystem
+	fsCtx, closeFsContext := context.WithCancel(context.Background())
+	fsA, err := New(fsCtx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// use a request-scoped context for operations that use the filesystem
+	reqCtx := context.Background()
+	path, err := fsA.Put(reqCtx, qfs.NewMemfileBytes("/ipfs/hello.text", []byte(`oh hai there`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// close the filesystem context. This must release the IPFS repo lock
+	closeFsContext()
+	<-fsA.Done()
+
+	// TODO(b5) - I'd assume we also can't get, but this still seems to work
+	// for some reason. Thankfully attempting to write to the datastore does in
+	// fact fail
+	// if _, err := fsA.Get(reqCtx, path); err == nil {
+	// 	t.Errorf("expected and error opening file from closed context. got none")
+	// }
+
+	_, err = fsA.Put(reqCtx, qfs.NewMemfileBytes("/ipfs/hello.text", []byte(`oh hai there?`)))
+	if err == nil {
+		t.Errorf("expected and error putting file into closed store. got none")
+	}
+
+	// create a new context & filesystem
+	fsCtx, closeFsContext = context.WithCancel(context.Background())
+	defer closeFsContext()
+
+	fsB, err := New(fsCtx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := fsB.Get(reqCtx, path); err != nil {
+		t.Errorf("getting file: %s", err)
 	}
 }

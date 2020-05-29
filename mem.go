@@ -15,7 +15,7 @@ import (
 // NewMemFilesystem allocates an instace of a mapstore that
 // can be used as a PathResolver
 // satisfies the FSConstructor interface
-func NewMemFilesystem(cfg map[string]interface{}) (Filesystem, error) {
+func NewMemFilesystem(_ context.Context, cfg map[string]interface{}) (Filesystem, error) {
 	return NewMemFS(), nil
 }
 

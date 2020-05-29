@@ -22,7 +22,7 @@ func NewMapstore() *MapStore {
 }
 
 // NewMapFilesystem satisfies the qfs.FSConstructor interface
-func NewMapFilesystem(ctgMap map[string]interface{}) (qfs.Filesystem, error) {
+func NewMapFilesystem(_ context.Context, _ map[string]interface{}) (qfs.Filesystem, error) {
 	return NewMapstore(), nil
 }
 

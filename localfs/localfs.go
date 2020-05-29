@@ -50,7 +50,7 @@ func mapToConfig(cfgMap map[string]interface{}) (*FSConfig, error) {
 
 // NewFilesystem creates a new local filesystem Pathresolver
 // with no options
-func NewFilesystem(cfgMap map[string]interface{}) (qfs.Filesystem, error) {
+func NewFilesystem(_ context.Context, cfgMap map[string]interface{}) (qfs.Filesystem, error) {
 	return NewFS(cfgMap)
 }
 
