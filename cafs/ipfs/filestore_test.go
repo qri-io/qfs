@@ -25,6 +25,9 @@ func init() {
 }
 
 func TestFS(t *testing.T) {
+	ctx, done := context.WithCancel(context.Background())
+	defer done()
+
 	path := filepath.Join(os.TempDir(), "ipfs_cafs_test")
 	if err := os.MkdirAll(path, os.ModePerm); err != nil {
 		t.Errorf("error creating temp dir: %s", err.Error())
@@ -37,7 +40,7 @@ func TestFS(t *testing.T) {
 		return
 	}
 
-	f, err := NewFS(nil, func(c *StoreCfg) {
+	f, err := NewFS(ctx, nil, func(c *StoreCfg) {
 		c.Online = false
 		c.FsRepoPath = path
 	})
@@ -57,6 +60,9 @@ func TestFS(t *testing.T) {
 }
 
 func TestCreatedWithAPIAddrFS(t *testing.T) {
+	ctx, done := context.WithCancel(context.Background())
+	defer done()
+
 	path := filepath.Join(os.TempDir(), "ipfs_cafs_test_api_addr")
 	if err := os.MkdirAll(path, os.ModePerm); err != nil {
 		t.Errorf("error creating temp dir: %s", err.Error())
@@ -71,7 +77,7 @@ func TestCreatedWithAPIAddrFS(t *testing.T) {
 	}
 
 	// create an ipfs fs with that repo
-	_, err := NewFS(nil, func(c *StoreCfg) {
+	_, err := NewFS(ctx, nil, func(c *StoreCfg) {
 		c.Online = false
 		c.FsRepoPath = path
 		c.EnableAPI = true
@@ -82,7 +88,7 @@ func TestCreatedWithAPIAddrFS(t *testing.T) {
 	}
 
 	// attempt to create another filestore using the same repo
-	if _, err := NewFS(nil, func(c *StoreCfg) {
+	if _, err := NewFS(ctx, nil, func(c *StoreCfg) {
 		c.Online = false
 		c.FsRepoPath = path
 	}); err == nil {
@@ -90,7 +96,7 @@ func TestCreatedWithAPIAddrFS(t *testing.T) {
 	}
 
 	// create another filestore, but with a fallback api address
-	cafs, err := NewFS(nil, func(c *StoreCfg) {
+	cafs, err := NewFS(ctx, nil, func(c *StoreCfg) {
 		c.Online = false
 		c.FsRepoPath = path
 		c.APIAddr = "127.0.0.1:5001/api/v0/swarm/peers"
@@ -104,7 +110,9 @@ func TestCreatedWithAPIAddrFS(t *testing.T) {
 }
 
 func BenchmarkRead(b *testing.B) {
-	ctx := context.Background()
+	ctx, done := context.WithCancel(context.Background())
+	defer done()
+
 	path := filepath.Join(os.TempDir(), "ipfs_cafs_benchmark_read")
 
 	if _, err := os.Open(filepath.Join(path, "config")); os.IsNotExist(err) {
@@ -121,7 +129,7 @@ func BenchmarkRead(b *testing.B) {
 		defer os.RemoveAll(path)
 	}
 
-	f, err := NewFS(nil, func(c *StoreCfg) {
+	f, err := NewFS(ctx, nil, func(c *StoreCfg) {
 		c.Online = false
 		c.FsRepoPath = path
 	})

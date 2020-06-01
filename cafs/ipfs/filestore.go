@@ -36,9 +36,10 @@ const prefix = "ipfs"
 var ErrNoRepoPath = errors.New("must provide a repo path ('fsRepoPath') to initialize an ipfs filesystem")
 
 type Filestore struct {
-	cfg  *StoreCfg
-	node *core.IpfsNode
-	capi coreiface.CoreAPI
+	cfg    *StoreCfg
+	node   *core.IpfsNode
+	capi   coreiface.CoreAPI
+	doneCh chan struct{}
 }
 
 func (fst Filestore) PathPrefix() string {
@@ -47,12 +48,12 @@ func (fst Filestore) PathPrefix() string {
 
 // NewFilesystem creates a new local filesystem PathResolver
 // with no options
-func NewFilesystem(cfgMap map[string]interface{}) (qfs.Filesystem, error) {
-	return NewFS(cfgMap)
+func NewFilesystem(ctx context.Context, cfgMap map[string]interface{}) (qfs.Filesystem, error) {
+	return NewFS(ctx, cfgMap)
 }
 
 // NewFS creates a new local filesystem PathResolver
-func NewFS(cfgMap map[string]interface{}, config ...Option) (qfs.Filesystem, error) {
+func NewFS(ctx context.Context, cfgMap map[string]interface{}, config ...Option) (qfs.Filesystem, error) {
 	cfg, err := mapToConfig(cfgMap)
 	if err != nil {
 		return nil, err
@@ -79,7 +80,8 @@ func NewFS(cfgMap map[string]interface{}, config ...Option) (qfs.Filesystem, err
 		return nil, ErrNoRepoPath
 	}
 
-	if err := cfg.InitRepo(cfg.Ctx); err != nil {
+	doneCh, err := cfg.OpenRepo(ctx)
+	if err != nil {
 		if cfg.APIAddr != "" && err == errRepoLock {
 			// if we cannot get a repo, and we have a fallback APIAdder
 			// attempt to create and return an `ipfs_http` filesystem istead
@@ -88,7 +90,7 @@ func NewFS(cfgMap map[string]interface{}, config ...Option) (qfs.Filesystem, err
 		return nil, err
 	}
 
-	node, err := core.NewNode(cfg.Ctx, &cfg.BuildCfg)
+	node, err := core.NewNode(ctx, &cfg.BuildCfg)
 	if err != nil {
 		return nil, fmt.Errorf("error creating ipfs node: %s", err.Error())
 	}
@@ -99,10 +101,18 @@ func NewFS(cfgMap map[string]interface{}, config ...Option) (qfs.Filesystem, err
 	}
 
 	return &Filestore{
-		cfg:  cfg,
-		node: node,
-		capi: capi,
+		cfg:    cfg,
+		node:   node,
+		capi:   capi,
+		doneCh: doneCh,
 	}, nil
+}
+
+var _ qfs.ReleasingFilesystem = (*Filestore)(nil)
+
+// Done implements the qfs.ReleasingFilesystem interface
+func (fst *Filestore) Done() chan struct{} {
+	return fst.doneCh
 }
 
 // Node exposes the internal ipfs node

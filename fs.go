@@ -38,7 +38,16 @@ type Filesystem interface {
 }
 
 // FSConstructor is a function that creates a filesystem from a config map
-type FSConstructor func(cfg map[string]interface{}) (Filesystem, error)
+// the passed in context should last for the duration of the existence of the
+// store. Any resources allocated by the store should be scoped to this context
+type FSConstructor func(ctx context.Context, cfg map[string]interface{}) (Filesystem, error)
+
+// ReleasingFilesystem provides a channel to signal cleanup is finished. It
+// sends after a filesystem has closed & about to release all it's resources
+type ReleasingFilesystem interface {
+	Filesystem
+	Done() chan struct{}
+}
 
 // Destroyer is an optional interface to tear down a filesystem, removing all
 // persisted resources
