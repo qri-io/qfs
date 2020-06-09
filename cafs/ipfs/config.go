@@ -1,11 +1,7 @@
 package ipfs_filestore
 
 import (
-	"context"
-	"fmt"
-
 	"github.com/ipfs/go-ipfs/core"
-	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -76,36 +72,4 @@ func OptsFromMap(opts map[string]interface{}) Option {
 		}
 
 	}
-}
-
-func (cfg *StoreCfg) OpenRepo(ctx context.Context) (chan struct{}, error) {
-	doneCh := make(chan struct{})
-	if cfg.NilRepo {
-		return doneCh, nil
-	}
-	if cfg.Repo != nil {
-		return doneCh, nil
-	}
-	if cfg.FsRepoPath != "" {
-		if daemonLocked, err := fsrepo.LockedByOtherProcess(cfg.FsRepoPath); err != nil {
-			return doneCh, err
-		} else if daemonLocked {
-			return doneCh, errRepoLock
-		}
-		localRepo, err := fsrepo.Open(cfg.FsRepoPath)
-		if err != nil {
-			if err == fsrepo.ErrNeedMigration {
-				return doneCh, ErrNeedMigration
-			}
-			return doneCh, fmt.Errorf("error opening local filestore ipfs repository: %w", err)
-		}
-
-		go func() {
-			<-ctx.Done()
-			localRepo.Close()
-			doneCh <- struct{}{}
-		}()
-		cfg.Repo = localRepo
-	}
-	return doneCh, nil
 }

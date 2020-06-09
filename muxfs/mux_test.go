@@ -11,14 +11,6 @@ import (
 	qipfs "github.com/qri-io/qfs/cafs/ipfs"
 )
 
-func init() {
-	// call LoadPlugins once with the empty string b/c we only rely on standard
-	// plugins
-	if err := qipfs.LoadPlugins(""); err != nil {
-		panic(err)
-	}
-}
-
 func TestDefaultNewMux(t *testing.T) {
 	path := filepath.Join(os.TempDir(), "muxfs_test")
 	if err := os.MkdirAll(path, os.ModePerm); err != nil {
@@ -234,4 +226,5 @@ func TestRepoLockPerContext(t *testing.T) {
 	if _, err := fsB.Get(reqCtx, path); err != nil {
 		t.Errorf("getting file: %s", err)
 	}
+
 }

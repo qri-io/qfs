@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/qri-io/qfs"
 	"github.com/qri-io/qfs/cafs"
@@ -16,17 +17,9 @@ import (
 
 var _ cafs.Fetcher = (*Filestore)(nil)
 
-func init() {
-	// call LoadPlugins once with the empty string b/c we only rely on standard
-	// plugins
-	if err := LoadPlugins(""); err != nil {
-		panic(err)
-	}
-}
-
 func TestFS(t *testing.T) {
-	ctx, done := context.WithCancel(context.Background())
-	defer done()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	path := filepath.Join(os.TempDir(), "ipfs_cafs_test")
 	if err := os.MkdirAll(path, os.ModePerm); err != nil {
@@ -56,6 +49,22 @@ func TestFS(t *testing.T) {
 	err = test.EnsureFilestoreBehavior(cafs)
 	if err != nil {
 		t.Errorf(err.Error())
+	}
+
+	releasingFS, ok := f.(qfs.ReleasingFilesystem)
+	if !ok {
+		t.Fatal("ipfs filesystem is not a qfs.ReleasingFilesystem")
+	}
+
+	cancel()
+	select {
+	case <-time.NewTimer(time.Millisecond * 100).C:
+		t.Errorf("done didn't fire within 100ms of context cancellation")
+	case <-releasingFS.Done():
+	}
+
+	if path, err := f.Put(context.Background(), qfs.NewMemfileBytes("/ipfs/foo.json", []byte(`oh hello`))); err == nil {
+		t.Errorf("expected putting file into closed store to error. got none. path: %q", path)
 	}
 }
 

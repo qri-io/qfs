@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	config "github.com/ipfs/go-ipfs-config"
 	"github.com/ipfs/go-ipfs/assets"
@@ -52,6 +53,10 @@ func InitRepo(repoPath, configPath string) error {
 			// res.SetError(err, cmds.ErrNormal)
 			return fmt.Errorf("invalid configuration file: %s", configPath)
 		}
+	}
+
+	if err := LoadIPFSPluginsOnce(repoPath); err != nil {
+		return err
 	}
 
 	if err := doInit(ioutil.Discard, repoPath, false, nBitsForKeypair, "", conf); err != nil {
@@ -215,10 +220,31 @@ func initializeIpnsKeyspace(repoRoot string) error {
 	return namesys.InitializeKeyspace(ctx, nd.Namesys, nd.Pinning, nd.PrivateKey)
 }
 
-// LoadPlugins loads & injects plugins from a given repo path. This needs to be
+var (
+	pluginLoadLock  sync.Once
+	pluginLoadError error
+)
+
+// LoadIPFSPluginsOnce runs IPFS plugin initialization.
+// we need to load plugins before attempting to configure IPFS, flatfs is
+// specified as part of the default IPFS configuration, but all flatfs
+// code is loaded as a plugin.  ¯\_(ツ)_/¯
+//
+// This works without anything present in the /.ipfs/plugins/ directory b/c
+// the default plugin set is complied into go-ipfs (and subsequently, the
+// qri binary) by default
+func LoadIPFSPluginsOnce(path string) error {
+	body := func() {
+		pluginLoadError = loadPlugins(path)
+	}
+	pluginLoadLock.Do(body)
+	return pluginLoadError
+}
+
+// loadPlugins loads & injects plugins from a given repo path. This needs to be
 // called once per active process with a repo
 // NB: this implies that changing repo locations requires a process restart
-func LoadPlugins(repoPath string) error {
+func loadPlugins(repoPath string) error {
 	// check if repo is accessible before loading plugins
 	pluginpath := filepath.Join(repoPath, "plugins")
 

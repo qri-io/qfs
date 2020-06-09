@@ -20,6 +20,8 @@ import (
 	"github.com/ipfs/go-cid"
 	core "github.com/ipfs/go-ipfs/core"
 	coreapi "github.com/ipfs/go-ipfs/core/coreapi"
+	ipfsrepo "github.com/ipfs/go-ipfs/repo"
+	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
 	logging "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	"github.com/ipfs/interface-go-ipfs-core/path"
@@ -36,10 +38,12 @@ const prefix = "ipfs"
 var ErrNoRepoPath = errors.New("must provide a repo path ('fsRepoPath') to initialize an ipfs filesystem")
 
 type Filestore struct {
-	cfg    *StoreCfg
-	node   *core.IpfsNode
-	capi   coreiface.CoreAPI
-	doneCh chan struct{}
+	cfg  *StoreCfg
+	node *core.IpfsNode
+	capi coreiface.CoreAPI
+
+	doneCh  chan struct{}
+	doneErr error
 }
 
 func (fst Filestore) PathPrefix() string {
@@ -80,7 +84,11 @@ func NewFS(ctx context.Context, cfgMap map[string]interface{}, config ...Option)
 		return nil, ErrNoRepoPath
 	}
 
-	doneCh, err := cfg.OpenRepo(ctx)
+	if err := LoadIPFSPluginsOnce(cfg.FsRepoPath); err != nil {
+		return nil, err
+	}
+
+	cfg.Repo, err = openRepo(ctx, cfg)
 	if err != nil {
 		if cfg.APIAddr != "" && err == errRepoLock {
 			// if we cannot get a repo, and we have a fallback APIAdder
@@ -100,19 +108,48 @@ func NewFS(ctx context.Context, cfgMap map[string]interface{}, config ...Option)
 		return nil, err
 	}
 
-	return &Filestore{
+	fst := &Filestore{
 		cfg:    cfg,
 		node:   node,
 		capi:   capi,
-		doneCh: doneCh,
-	}, nil
+		doneCh: make(chan struct{}),
+	}
+
+	go func(fst *Filestore) {
+		<-ctx.Done()
+		fst.doneErr = ctx.Err()
+		log.Debugf("closing repo at %q", cfg.FsRepoPath)
+		if err := cfg.Repo.Close(); err != nil {
+			log.Error(err)
+		}
+		for {
+			daemonLocked, err := fsrepo.LockedByOtherProcess(cfg.FsRepoPath)
+			if err != nil {
+				log.Error(err)
+				break
+			} else if daemonLocked {
+				time.Sleep(time.Millisecond * 25)
+				continue
+			}
+			break
+		}
+		log.Debugf("closed repo at %q", cfg.FsRepoPath)
+		close(fst.doneCh)
+	}(fst)
+
+	return fst, nil
 }
 
 var _ qfs.ReleasingFilesystem = (*Filestore)(nil)
 
 // Done implements the qfs.ReleasingFilesystem interface
-func (fst *Filestore) Done() chan struct{} {
+func (fst *Filestore) Done() <-chan struct{} {
 	return fst.doneCh
+}
+
+// DoneErr returns errors in closing the filesystem
+func (fst *Filestore) DoneErr() error {
+	return fst.doneErr
 }
 
 // Node exposes the internal ipfs node
@@ -125,6 +162,33 @@ func (fst *Filestore) Node() *core.IpfsNode {
 // IPFSCoreAPI exposes the Filestore's CoreAPI interface
 func (fst *Filestore) IPFSCoreAPI() coreiface.CoreAPI {
 	return fst.capi
+}
+
+func openRepo(ctx context.Context, cfg *StoreCfg) (ipfsrepo.Repo, error) {
+	if cfg.NilRepo {
+		return nil, nil
+	}
+	if cfg.Repo != nil {
+		return nil, nil
+	}
+	if cfg.FsRepoPath != "" {
+		log.Debugf("opening repo at %q", cfg.FsRepoPath)
+		if daemonLocked, err := fsrepo.LockedByOtherProcess(cfg.FsRepoPath); err != nil {
+			return nil, err
+		} else if daemonLocked {
+			return nil, errRepoLock
+		}
+		localRepo, err := fsrepo.Open(cfg.FsRepoPath)
+		if err != nil {
+			if err == fsrepo.ErrNeedMigration {
+				return nil, ErrNeedMigration
+			}
+			return nil, fmt.Errorf("error opening local filestore ipfs repository: %w", err)
+		}
+
+		return localRepo, nil
+	}
+	return nil, fmt.Errorf("no repo path to open IPFS fsrepo")
 }
 
 func (fst *Filestore) Online() bool {
@@ -149,6 +213,9 @@ func (fst *Filestore) GoOnline(ctx context.Context) error {
 		cfg:  cfg,
 		node: node,
 		capi: capi,
+
+		doneCh:  fst.doneCh,
+		doneErr: fst.doneErr,
 	}
 
 	if cfg.EnableAPI {
