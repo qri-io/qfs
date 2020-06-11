@@ -30,12 +30,11 @@ import (
 	files "github.com/qri-io/qfs/cafs/ipfs/go-ipfs-files"
 )
 
-var log = logging.Logger("cafs/ipfs")
-
-const prefix = "ipfs"
-
-// ErrNoRepoPath is returned when no repo path is provided in the config
-var ErrNoRepoPath = errors.New("must provide a repo path ('fsRepoPath') to initialize an ipfs filesystem")
+var (
+	log = logging.Logger("cafs/ipfs")
+	// ErrNoRepoPath is returned when no repo path is provided in the config
+	ErrNoRepoPath = errors.New("must provide a repo path ('path') to initialize an ipfs filesystem")
+)
 
 type Filestore struct {
 	cfg  *StoreCfg
@@ -46,26 +45,20 @@ type Filestore struct {
 	doneErr error
 }
 
-func (fst Filestore) PathPrefix() string {
-	return prefix
-}
+var _ qfs.ReleasingFilesystem = (*Filestore)(nil)
 
 // NewFilesystem creates a new local filesystem PathResolver
 // with no options
 func NewFilesystem(ctx context.Context, cfgMap map[string]interface{}) (qfs.Filesystem, error) {
-	return NewFS(ctx, cfgMap)
-}
-
-// NewFS creates a new local filesystem PathResolver
-func NewFS(ctx context.Context, cfgMap map[string]interface{}, config ...Option) (qfs.Filesystem, error) {
 	cfg, err := mapToConfig(cfgMap)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, option := range config {
-		option(cfg)
+	if cfg.BuildCfg.ExtraOpts == nil {
+		cfg.BuildCfg.ExtraOpts = map[string]bool{}
 	}
+	cfg.BuildCfg.ExtraOpts["pubsub"] = cfg.EnablePubSub
 
 	if cfg.Node != nil {
 		capi, err := coreapi.NewCoreAPI(cfg.Node)
@@ -80,20 +73,22 @@ func NewFS(ctx context.Context, cfgMap map[string]interface{}, config ...Option)
 		}, nil
 	}
 
-	if cfg.FsRepoPath == "" {
+	if cfg.Path == "" && cfg.URL == "" {
 		return nil, ErrNoRepoPath
+	} else if cfg.URL != "" {
+		return ipfs_http.NewFilesystem(map[string]interface{}{"url": cfg.URL})
 	}
 
-	if err := LoadIPFSPluginsOnce(cfg.FsRepoPath); err != nil {
+	if err := LoadIPFSPluginsOnce(cfg.Path); err != nil {
 		return nil, err
 	}
 
 	cfg.Repo, err = openRepo(ctx, cfg)
 	if err != nil {
-		if cfg.APIAddr != "" && err == errRepoLock {
+		if cfg.URL != "" && err == errRepoLock {
 			// if we cannot get a repo, and we have a fallback APIAdder
 			// attempt to create and return an `ipfs_http` filesystem istead
-			return ipfs_http.NewFilesystem(map[string]interface{}{"ipfsApiUrl": cfg.APIAddr})
+			return ipfs_http.NewFilesystem(map[string]interface{}{"url": cfg.URL})
 		}
 		return nil, err
 	}
@@ -118,29 +113,34 @@ func NewFS(ctx context.Context, cfgMap map[string]interface{}, config ...Option)
 	go func(fst *Filestore) {
 		<-ctx.Done()
 		fst.doneErr = ctx.Err()
-		log.Debugf("closing repo at %q", cfg.FsRepoPath)
+		log.Debugf("closing repo at %q", cfg.Path)
 		if err := cfg.Repo.Close(); err != nil {
 			log.Error(err)
 		}
 		for {
-			daemonLocked, err := fsrepo.LockedByOtherProcess(cfg.FsRepoPath)
+			daemonLocked, err := fsrepo.LockedByOtherProcess(cfg.Path)
 			if err != nil {
 				log.Error(err)
 				break
 			} else if daemonLocked {
+				log.Errorf("fsrepo is still locked")
 				time.Sleep(time.Millisecond * 25)
 				continue
 			}
 			break
 		}
-		log.Debugf("closed repo at %q", cfg.FsRepoPath)
+		log.Debugf("closed repo at %q", cfg.Path)
 		close(fst.doneCh)
 	}(fst)
 
 	return fst, nil
 }
 
-var _ qfs.ReleasingFilesystem = (*Filestore)(nil)
+const prefix = "ipfs"
+
+func (fst Filestore) PathPrefix() string {
+	return prefix
+}
 
 // Done implements the qfs.ReleasingFilesystem interface
 func (fst *Filestore) Done() <-chan struct{} {
@@ -171,14 +171,14 @@ func openRepo(ctx context.Context, cfg *StoreCfg) (ipfsrepo.Repo, error) {
 	if cfg.Repo != nil {
 		return nil, nil
 	}
-	if cfg.FsRepoPath != "" {
-		log.Debugf("opening repo at %q", cfg.FsRepoPath)
-		if daemonLocked, err := fsrepo.LockedByOtherProcess(cfg.FsRepoPath); err != nil {
+	if cfg.Path != "" {
+		log.Debugf("opening repo at %q", cfg.Path)
+		if daemonLocked, err := fsrepo.LockedByOtherProcess(cfg.Path); err != nil {
 			return nil, err
 		} else if daemonLocked {
 			return nil, errRepoLock
 		}
-		localRepo, err := fsrepo.Open(cfg.FsRepoPath)
+		localRepo, err := fsrepo.Open(cfg.Path)
 		if err != nil {
 			if err == fsrepo.ErrNeedMigration {
 				return nil, ErrNeedMigration

@@ -31,7 +31,7 @@ func (fs *Filestore) serveAPI() error {
 	opts := []ipfs_corehttp.ServeOption{
 		ipfs_corehttp.GatewayOption(true, "/ipfs", "/ipns"),
 		ipfs_corehttp.WebUIOption,
-		ipfs_corehttp.CommandsOption(cmdCtx(fs.node, cfg.FsRepoPath)),
+		ipfs_corehttp.CommandsOption(cmdCtx(fs.node, cfg.Path)),
 	}
 
 	// TODO (b5): I've added this fmt.Println because the corehttp package includes a println

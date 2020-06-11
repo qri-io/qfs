@@ -12,13 +12,18 @@ type StoreCfg struct {
 	// optionally just supply a node. will override everything
 	Node *core.IpfsNode
 	// path to a local filesystem fs repo
-	FsRepoPath string
-	// EnableAPI
-	EnableAPI bool
-	// APIAddr is an ipfs http api address, used as a fallback if we cannot
+	Path string
+	// URL is an ipfs http api address, used as a fallback if we cannot
 	// config an ipfs filesystem. The filesystem will instead be a `ipfs_http`
 	// filesystem.
-	APIAddr string
+	URL string
+
+	// weather or not to serve the local IPFS HTTP API. does not apply when
+	// operating over HTTP via a URL
+	EnableAPI bool
+	// enable experimental IPFS pubsub service. does not apply when
+	// operating over HTTP via a URL
+	EnablePubSub bool
 }
 
 func mapToConfig(cfgmap map[string]interface{}) (*StoreCfg, error) {
@@ -39,37 +44,6 @@ func DefaultConfig(path string) *StoreCfg {
 		BuildCfg: core.BuildCfg{
 			Online: false,
 		},
-		FsRepoPath: path,
-	}
-}
-
-// Option is a function that adjusts the store configuration
-type Option func(o *StoreCfg)
-
-// OptEnablePubSub configures ipfs to use the experimental pubsub store
-func OptEnablePubSub(o *StoreCfg) {
-	o.BuildCfg.ExtraOpts = map[string]bool{
-		"pubsub": true,
-	}
-}
-
-// OptsFromMap detects options from a map based on special keywords
-func OptsFromMap(opts map[string]interface{}) Option {
-	return func(o *StoreCfg) {
-		if opts == nil {
-			return
-		}
-
-		if api, ok := opts["api"].(bool); ok {
-			o.EnableAPI = api
-		}
-
-		if ps, ok := opts["pubsub"].(bool); ok {
-			if o.BuildCfg.ExtraOpts == nil {
-				o.BuildCfg.ExtraOpts = map[string]bool{}
-			}
-			o.BuildCfg.ExtraOpts["pubsub"] = ps
-		}
-
+		Path: path,
 	}
 }

@@ -33,9 +33,9 @@ func TestFS(t *testing.T) {
 		return
 	}
 
-	f, err := NewFS(ctx, nil, func(c *StoreCfg) {
-		c.Online = false
-		c.FsRepoPath = path
+	f, err := NewFilesystem(ctx, map[string]interface{}{
+		"online": false,
+		"path":   path,
 	})
 	if err != nil {
 		t.Errorf("error creating filestore: %s", err.Error())
@@ -86,10 +86,10 @@ func TestCreatedWithAPIAddrFS(t *testing.T) {
 	}
 
 	// create an ipfs fs with that repo
-	_, err := NewFS(ctx, nil, func(c *StoreCfg) {
-		c.Online = false
-		c.FsRepoPath = path
-		c.EnableAPI = true
+	_, err := NewFilesystem(ctx, map[string]interface{}{
+		"online":    false,
+		"path":      path,
+		"enableAPI": true,
 	})
 	if err != nil {
 		t.Errorf("error creating filestore: %s", err.Error())
@@ -97,18 +97,18 @@ func TestCreatedWithAPIAddrFS(t *testing.T) {
 	}
 
 	// attempt to create another filestore using the same repo
-	if _, err := NewFS(ctx, nil, func(c *StoreCfg) {
-		c.Online = false
-		c.FsRepoPath = path
+	if _, err := NewFilesystem(ctx, map[string]interface{}{
+		"online": false,
+		"path":   path,
 	}); err == nil {
 		t.Errorf("There should be a repo lock error when attempting to create another filesystem using the same repo path, however no error occured")
 	}
 
 	// create another filestore, but with a fallback api address
-	cafs, err := NewFS(ctx, nil, func(c *StoreCfg) {
-		c.Online = false
-		c.FsRepoPath = path
-		c.APIAddr = "127.0.0.1:5001/api/v0/swarm/peers"
+	cafs, err := NewFilesystem(ctx, map[string]interface{}{
+		"online": false,
+		"path":   path,
+		"url":    "http://127.0.0.1:5001/api/v0",
 	})
 	if err != nil {
 		t.Errorf("error creating ipfs_http filesystem: %s", err)
@@ -138,9 +138,9 @@ func BenchmarkRead(b *testing.B) {
 		defer os.RemoveAll(path)
 	}
 
-	f, err := NewFS(ctx, nil, func(c *StoreCfg) {
-		c.Online = false
-		c.FsRepoPath = path
+	f, err := NewFilesystem(ctx, map[string]interface{}{
+		"online": false,
+		"path":   path,
 	})
 	if err != nil {
 		b.Errorf("error creating filestore: %s", err.Error())

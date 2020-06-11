@@ -180,7 +180,7 @@ func OptSetIPFSPath(path string) Option {
 		if ipfs.Config == nil {
 			ipfs.Config = map[string]interface{}{}
 		}
-		ipfs.Config["fsRepoPath"] = path
+		ipfs.Config["path"] = path
 		if ipfs.Type == "" {
 			ipfs.Type = "ipfs"
 			*o = append(*o, *ipfs)

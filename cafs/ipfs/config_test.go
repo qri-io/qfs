@@ -6,21 +6,26 @@ import (
 
 func TestMapToConfig(t *testing.T) {
 	m := map[string]interface{}{
-		"fsRepoPath": "/path/to/repo",
-		"enableAPI":  true,
-		"apiAddr":    "/api/addr",
+		"path": "/path/to/repo",
+		"url":  "http://localhost:5001",
+
+		"enableAPI":    true,
+		"enablePubSub": true,
 	}
 	cfg, err := mapToConfig(m)
 	if err != nil {
 		t.Errorf("error converting map string interface to config struct: %s", err)
 	}
-	if cfg.FsRepoPath != m["fsRepoPath"] {
-		t.Errorf("expected cfg.FsRepoPath to be %s, got %s", m["fsRepoPath"], cfg.FsRepoPath)
+	if cfg.Path != m["path"] {
+		t.Errorf("expected cfg.path to be %s, got %s", m["path"], cfg.Path)
 	}
 	if cfg.EnableAPI != m["enableAPI"] {
 		t.Errorf("expected cfg.EnableAPI to be %t, got %t", m["enableAPI"], cfg.EnableAPI)
 	}
-	if cfg.APIAddr != m["apiAddr"] {
-		t.Errorf("expected cfg.APIAddr to be %s, got %s", m["apiAddr"], cfg.APIAddr)
+	if cfg.EnablePubSub != m["enablePubSub"] {
+		t.Errorf("expected cfg.EnableAPI to be %t, got %t", m["enablePubSub"], cfg.EnablePubSub)
+	}
+	if cfg.URL != m["url"] {
+		t.Errorf("expected cfg.URL to be %s, got %s", m["apiAddr"], cfg.URL)
 	}
 }
