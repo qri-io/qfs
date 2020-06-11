@@ -126,7 +126,6 @@ func (lfs *FS) Put(ctx context.Context, file qfs.File) (resultPath string, err e
 				return "", err
 			}
 		}
-		return path, nil
 	}
 
 	f, err := os.Create(path)

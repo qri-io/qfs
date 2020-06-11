@@ -46,7 +46,8 @@ type FSConstructor func(ctx context.Context, cfg map[string]interface{}) (Filesy
 // sends after a filesystem has closed & about to release all it's resources
 type ReleasingFilesystem interface {
 	Filesystem
-	Done() chan struct{}
+	Done() <-chan struct{}
+	DoneErr() error
 }
 
 // Destroyer is an optional interface to tear down a filesystem, removing all

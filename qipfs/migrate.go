@@ -1,4 +1,4 @@
-package ipfs_filestore
+package qipfs
 
 import (
 	"fmt"
@@ -57,7 +57,7 @@ func RunMigrations(ipfsRepoPath, newRepoPath string) error {
 		return fmt.Errorf("error moving repo onto new path: %s", err)
 	}
 
-	rollback = nil  
+	rollback = nil
 	return nil
 }
 

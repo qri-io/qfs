@@ -23,7 +23,7 @@ import (
 	config "github.com/ipfs/go-ipfs-config"
 	pi "github.com/ipfs/go-ipfs-posinfo"
 	dag "github.com/ipfs/go-merkledag"
-	files "github.com/qri-io/qfs/cafs/ipfs/go-ipfs-files"
+	files "github.com/qri-io/qfs/qipfs/go-ipfs-files"
 )
 
 const testPeerID = "QmTFauExutTsy4XP6JbMFcw2Wa9645HJt2bTqL6qYDCKfe"

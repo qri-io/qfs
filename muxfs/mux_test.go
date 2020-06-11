@@ -8,16 +8,8 @@ import (
 	"testing"
 
 	"github.com/qri-io/qfs"
-	qipfs "github.com/qri-io/qfs/cafs/ipfs"
+	"github.com/qri-io/qfs/qipfs"
 )
-
-func init() {
-	// call LoadPlugins once with the empty string b/c we only rely on standard
-	// plugins
-	if err := qipfs.LoadPlugins(""); err != nil {
-		panic(err)
-	}
-}
 
 func TestDefaultNewMux(t *testing.T) {
 	path := filepath.Join(os.TempDir(), "muxfs_test")
@@ -34,7 +26,7 @@ func TestDefaultNewMux(t *testing.T) {
 
 	ctx := context.Background()
 	cfg := []MuxConfig{
-		{Type: "ipfs", Config: map[string]interface{}{"fsRepoPath": path}},
+		{Type: "ipfs", Config: map[string]interface{}{"path": path}},
 		{Type: "http"},
 		{Type: "local"},
 		{Type: "mem"},
@@ -67,7 +59,7 @@ func TestOptSetIPFSPathWithConfig(t *testing.T) {
 	o := &[]MuxConfig{
 		{
 			Type:   "ipfs",
-			Config: map[string]interface{}{"fsRepoPath": "bad/path"},
+			Config: map[string]interface{}{"path": "bad/path"},
 		},
 	}
 	path := "test/path"
@@ -88,7 +80,7 @@ func TestOptSetIPFSPathWithConfig(t *testing.T) {
 		t.Errorf("expected MuxConfig of type 'ipfs' to exist, got %s", ipfscfg.Type)
 		return
 	}
-	gotPath, ok := ipfscfg.Config["fsRepoPath"]
+	gotPath, ok := ipfscfg.Config["path"]
 	if !ok {
 		t.Errorf("expected ipfs map[string]interface config to have field 'fsRepoPath', but it does not")
 		return
@@ -130,9 +122,9 @@ func TestOptSetIPFSPathEmptyConfig(t *testing.T) {
 		t.Errorf("expected MuxConfig of type 'ipfs' to exist, got %s", ipfscfg.Type)
 		return
 	}
-	gotPath, ok := ipfscfg.Config["fsRepoPath"]
+	gotPath, ok := ipfscfg.Config["path"]
 	if !ok {
-		t.Errorf("expected ipfs map[string]interface config to have field 'fsRepoPath', but it does not")
+		t.Errorf("expected ipfs map[string]interface config to have field 'path', but it does not")
 		return
 	}
 	if gotPath != path {
@@ -163,7 +155,7 @@ func TestCAFSFromIPFS(t *testing.T) {
 
 	ctx := context.Background()
 	cfg := []MuxConfig{
-		{Type: "ipfs", Config: map[string]interface{}{"fsRepoPath": path}},
+		{Type: "ipfs", Config: map[string]interface{}{"path": path}},
 	}
 	mfs, err := New(ctx, cfg)
 	if err != nil {
@@ -187,7 +179,7 @@ func TestRepoLockPerContext(t *testing.T) {
 		{
 			Type: "ipfs",
 			Config: map[string]interface{}{
-				"fsRepoPath": dir,
+				"path": dir,
 			},
 		},
 	}
@@ -234,4 +226,5 @@ func TestRepoLockPerContext(t *testing.T) {
 	if _, err := fsB.Get(reqCtx, path); err != nil {
 		t.Errorf("getting file: %s", err)
 	}
+
 }

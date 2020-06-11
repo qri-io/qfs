@@ -7,9 +7,9 @@ import (
 
 	"github.com/qri-io/qfs"
 	"github.com/qri-io/qfs/cafs"
-	qipfs "github.com/qri-io/qfs/cafs/ipfs"
 	"github.com/qri-io/qfs/httpfs"
 	"github.com/qri-io/qfs/localfs"
+	"github.com/qri-io/qfs/qipfs"
 )
 
 // NewMux creates a new path muxer
@@ -20,9 +20,11 @@ func NewMux(handlers map[string]qfs.Filesystem) *Mux {
 // Mux multiplexes together multiple filesystems using path multiplexing.
 // It's a way to use multiple filesystem implementations as a single FS
 type Mux struct {
-	handlers  map[string]qfs.Filesystem
-	doneCh    chan struct{}
-	releasers sync.WaitGroup
+	handlers map[string]qfs.Filesystem
+
+	doneCh  chan struct{}
+	doneWg  sync.WaitGroup
+	doneErr error
 }
 
 // compile-time assertion that MapStore satisfies the Filesystem interface
@@ -92,24 +94,30 @@ func New(ctx context.Context, cfgs []MuxConfig, opts ...Option) (*Mux, error) {
 		mux.handlers[cfg.Type] = fs
 
 		if releaser, ok := fs.(qfs.ReleasingFilesystem); ok {
-			mux.releasers.Add(1)
+			mux.doneWg.Add(1)
 			go func(releaser qfs.ReleasingFilesystem) {
 				<-releaser.Done()
-				mux.releasers.Done()
+				mux.doneErr = releaser.DoneErr()
+				mux.doneWg.Done()
 			}(releaser)
 		}
 	}
 
 	go func() {
-		mux.releasers.Wait()
-		mux.doneCh <- struct{}{}
+		mux.doneWg.Wait()
+		close(mux.doneCh)
 	}()
 
 	return mux, nil
 }
 
+// DoneErr will return any error value after the done channel is closed
+func (m *Mux) DoneErr() error {
+	return m.doneErr
+}
+
 // Done implements the qfs.ReleasingFilesystem interface
-func (m *Mux) Done() chan struct{} {
+func (m *Mux) Done() <-chan struct{} {
 	return m.doneCh
 }
 
@@ -118,7 +126,7 @@ func noMuxerError(kind, path string) error {
 }
 
 // Get a path
-func (m Mux) Get(ctx context.Context, path string) (qfs.File, error) {
+func (m *Mux) Get(ctx context.Context, path string) (qfs.File, error) {
 	if path == "" {
 		return nil, qfs.ErrNotFound
 	}
@@ -134,7 +142,7 @@ func (m Mux) Get(ctx context.Context, path string) (qfs.File, error) {
 
 // Put places a file or directory on the filesystem, returning the root path.
 // The returned path may or may not honor the path of the given file
-func (m Mux) Put(ctx context.Context, file qfs.File) (resPath string, err error) {
+func (m *Mux) Put(ctx context.Context, file qfs.File) (resPath string, err error) {
 	path := file.FullPath()
 	kind := qfs.PathKind(path)
 	handler, ok := m.handlers[kind]
@@ -146,7 +154,7 @@ func (m Mux) Put(ctx context.Context, file qfs.File) (resPath string, err error)
 }
 
 // Delete removes a file or directory from the filesystem
-func (m Mux) Delete(ctx context.Context, path string) (err error) {
+func (m *Mux) Delete(ctx context.Context, path string) (err error) {
 	kind := qfs.PathKind(path)
 	handler, ok := m.handlers[kind]
 	if !ok {
@@ -172,7 +180,7 @@ func OptSetIPFSPath(path string) Option {
 		if ipfs.Config == nil {
 			ipfs.Config = map[string]interface{}{}
 		}
-		ipfs.Config["fsRepoPath"] = path
+		ipfs.Config["path"] = path
 		if ipfs.Type == "" {
 			ipfs.Type = "ipfs"
 			*o = append(*o, *ipfs)
