@@ -1,4 +1,4 @@
-package ipfs_filestore
+package qipfs
 
 import (
 	"context"
@@ -11,11 +11,9 @@ import (
 
 	"github.com/qri-io/qfs"
 	"github.com/qri-io/qfs/cafs"
-	"github.com/qri-io/qfs/cafs/ipfs_http"
 	"github.com/qri-io/qfs/cafs/test"
+	"github.com/qri-io/qfs/qipfs/qipfs_http"
 )
-
-var _ cafs.Fetcher = (*Filestore)(nil)
 
 func TestFS(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -113,7 +111,7 @@ func TestCreatedWithAPIAddrFS(t *testing.T) {
 	if err != nil {
 		t.Errorf("error creating ipfs_http filesystem: %s", err)
 	}
-	if _, ok := cafs.(*ipfs_http.Filestore); !ok {
+	if _, ok := cafs.(*qipfs_http.Filestore); !ok {
 		t.Errorf("returned filesystem is not of expected type `ipfs_http`")
 	}
 }

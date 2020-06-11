@@ -1,4 +1,4 @@
-package ipfs_http
+package qipfs_http
 
 import (
 	"testing"

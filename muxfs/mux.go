@@ -7,9 +7,9 @@ import (
 
 	"github.com/qri-io/qfs"
 	"github.com/qri-io/qfs/cafs"
-	qipfs "github.com/qri-io/qfs/cafs/ipfs"
 	"github.com/qri-io/qfs/httpfs"
 	"github.com/qri-io/qfs/localfs"
+	"github.com/qri-io/qfs/qipfs"
 )
 
 // NewMux creates a new path muxer

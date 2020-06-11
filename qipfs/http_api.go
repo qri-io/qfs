@@ -1,4 +1,4 @@
-package ipfs_filestore
+package qipfs
 
 import (
 	"fmt"

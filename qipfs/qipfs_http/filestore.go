@@ -1,4 +1,4 @@
-package ipfs_http
+package qipfs_http
 
 import (
 	"context"
@@ -11,16 +11,13 @@ import (
 	path "github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/mitchellh/mapstructure"
 
-	// httpapi "github.com/qri-io/ipfs-core-http"
 	httpapi "github.com/ipfs/go-ipfs-http-client"
 	qfs "github.com/qri-io/qfs"
 	cafs "github.com/qri-io/qfs/cafs"
-	files "github.com/qri-io/qfs/cafs/ipfs/go-ipfs-files"
+	files "github.com/qri-io/qfs/qipfs/go-ipfs-files"
 )
 
 var log = logging.Logger("cafs/ipfs_http")
-
-const prefix = "ipfs"
 
 type Filestore struct {
 	capi coreiface.CoreAPI
@@ -29,10 +26,6 @@ type Filestore struct {
 // FSConfig adjusts the behaviour of an FS instance
 type FSConfig struct {
 	URL string // url to the ipfs api
-}
-
-func (fst Filestore) PathPrefix() string {
-	return prefix
 }
 
 // if no cfgMap is given, return the default config
@@ -66,6 +59,12 @@ func NewFilesystem(cfgMap map[string]interface{}) (cafs.Filestore, error) {
 
 func (fst *Filestore) IPFSCoreAPI() coreiface.CoreAPI {
 	return fst.capi
+}
+
+const prefix = "ipfs"
+
+func (fst Filestore) PathPrefix() string {
+	return prefix
 }
 
 // Online always returns true

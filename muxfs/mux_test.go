@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/qri-io/qfs"
-	qipfs "github.com/qri-io/qfs/cafs/ipfs"
+	"github.com/qri-io/qfs/qipfs"
 )
 
 func TestDefaultNewMux(t *testing.T) {
@@ -82,11 +82,11 @@ func TestOptSetIPFSPathWithConfig(t *testing.T) {
 	}
 	gotPath, ok := ipfscfg.Config["path"]
 	if !ok {
-		t.Errorf("expected ipfs map[string]interface config to have field 'path', but it does not")
+		t.Errorf("expected ipfs map[string]interface config to have field 'fsRepoPath', but it does not")
 		return
 	}
 	if gotPath != path {
-		t.Errorf("expected path to be '%s', got '%s'", path, gotPath)
+		t.Errorf("expected fsRepoPath to be '%s', got '%s'", path, gotPath)
 	}
 }
 
@@ -128,7 +128,7 @@ func TestOptSetIPFSPathEmptyConfig(t *testing.T) {
 		return
 	}
 	if gotPath != path {
-		t.Errorf("expected path to be '%s', got '%s'", path, gotPath)
+		t.Errorf("expected fsRepoPath to be '%s', got '%s'", path, gotPath)
 	}
 }
 

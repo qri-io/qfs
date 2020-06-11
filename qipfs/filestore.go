@@ -1,4 +1,4 @@
-package ipfs_filestore
+package qipfs
 
 import (
 	"context"
@@ -14,8 +14,7 @@ import (
 	// moving toward coreapi.coreUnix().Add() with properly-configured options,
 	// but I'd like a test before we do that. We may also want to consider switching
 	// Qri to writing IPLD. Lots to think about.
-	coreunix "github.com/qri-io/qfs/cafs/ipfs/coreunix"
-	"github.com/qri-io/qfs/cafs/ipfs_http"
+	coreunix "github.com/qri-io/qfs/qipfs/coreunix"
 
 	"github.com/ipfs/go-cid"
 	core "github.com/ipfs/go-ipfs/core"
@@ -27,7 +26,8 @@ import (
 	"github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/qri-io/qfs"
 	cafs "github.com/qri-io/qfs/cafs"
-	files "github.com/qri-io/qfs/cafs/ipfs/go-ipfs-files"
+	files "github.com/qri-io/qfs/qipfs/go-ipfs-files"
+	"github.com/qri-io/qfs/qipfs/qipfs_http"
 )
 
 var (
@@ -45,7 +45,10 @@ type Filestore struct {
 	doneErr error
 }
 
-var _ qfs.ReleasingFilesystem = (*Filestore)(nil)
+var (
+	_ qfs.ReleasingFilesystem = (*Filestore)(nil)
+	_ cafs.Fetcher            = (*Filestore)(nil)
+)
 
 // NewFilesystem creates a new local filesystem PathResolver
 // with no options
@@ -76,7 +79,7 @@ func NewFilesystem(ctx context.Context, cfgMap map[string]interface{}) (qfs.File
 	if cfg.Path == "" && cfg.URL == "" {
 		return nil, ErrNoRepoPath
 	} else if cfg.URL != "" {
-		return ipfs_http.NewFilesystem(map[string]interface{}{"url": cfg.URL})
+		return qipfs_http.NewFilesystem(map[string]interface{}{"url": cfg.URL})
 	}
 
 	if err := LoadIPFSPluginsOnce(cfg.Path); err != nil {
@@ -87,8 +90,8 @@ func NewFilesystem(ctx context.Context, cfgMap map[string]interface{}) (qfs.File
 	if err != nil {
 		if cfg.URL != "" && err == errRepoLock {
 			// if we cannot get a repo, and we have a fallback APIAdder
-			// attempt to create and return an `ipfs_http` filesystem istead
-			return ipfs_http.NewFilesystem(map[string]interface{}{"url": cfg.URL})
+			// attempt to create and return an `qipfs_http` filesystem istead
+			return qipfs_http.NewFilesystem(map[string]interface{}{"url": cfg.URL})
 		}
 		return nil, err
 	}

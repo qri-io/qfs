@@ -1,4 +1,4 @@
-package ipfs_filestore
+package qipfs
 
 import (
 	"github.com/ipfs/go-ipfs/core"
