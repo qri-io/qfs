@@ -63,19 +63,6 @@ func NewFilesystem(ctx context.Context, cfgMap map[string]interface{}) (qfs.File
 	}
 	cfg.BuildCfg.ExtraOpts["pubsub"] = cfg.EnablePubSub
 
-	if cfg.Node != nil {
-		capi, err := coreapi.NewCoreAPI(cfg.Node)
-		if err != nil {
-			return nil, err
-		}
-
-		return &Filestore{
-			cfg:  cfg,
-			node: cfg.Node,
-			capi: capi,
-		}, nil
-	}
-
 	if cfg.Path == "" && cfg.URL == "" {
 		return nil, ErrNoRepoPath
 	} else if cfg.URL != "" {
@@ -139,8 +126,22 @@ func NewFilesystem(ctx context.Context, cfgMap map[string]interface{}) (qfs.File
 	return fst, nil
 }
 
+// NewFilesystemFromNode wraps an existing IPFS node with a qfs.Filesystem
+func NewFilesystemFromNode(node *core.IpfsNode) (qfs.Filesystem, error) {
+	capi, err := coreapi.NewCoreAPI(node)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Filestore{
+		node: node,
+		capi: capi,
+	}, nil
+}
+
 const prefix = "ipfs"
 
+// PathPrefix returns the muxing prefix this filesystem handles: "ipfs"
 func (fst Filestore) PathPrefix() string {
 	return prefix
 }
