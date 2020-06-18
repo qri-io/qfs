@@ -25,7 +25,7 @@ func TestDefaultNewMux(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	cfg := []MuxConfig{
+	cfg := []qfs.Config{
 		{Type: "ipfs", Config: map[string]interface{}{"path": path}},
 		{Type: "http"},
 		{Type: "local"},
@@ -56,7 +56,7 @@ func TestDefaultNewMux(t *testing.T) {
 
 func TestOptSetIPFSPathWithConfig(t *testing.T) {
 	// test empty muxConfig
-	o := &[]MuxConfig{
+	o := &[]qfs.Config{
 		{
 			Type:   "ipfs",
 			Config: map[string]interface{}{"path": "bad/path"},
@@ -64,10 +64,10 @@ func TestOptSetIPFSPathWithConfig(t *testing.T) {
 	}
 	path := "test/path"
 	OptSetIPFSPath(path)(o)
-	var ipfscfg MuxConfig
+	var ipfscfg qfs.Config
 
 	if len(*o) != 1 {
-		t.Errorf("expected MuxConfig slice to have length 1, got %d", len(*o))
+		t.Errorf("expected qfs.Config slice to have length 1, got %d", len(*o))
 		return
 	}
 	for _, mc := range *o {
@@ -77,7 +77,7 @@ func TestOptSetIPFSPathWithConfig(t *testing.T) {
 		}
 	}
 	if ipfscfg.Type != "ipfs" {
-		t.Errorf("expected MuxConfig of type 'ipfs' to exist, got %s", ipfscfg.Type)
+		t.Errorf("expected qfs.Config of type 'ipfs' to exist, got %s", ipfscfg.Type)
 		return
 	}
 	gotPath, ok := ipfscfg.Config["path"]
@@ -92,24 +92,24 @@ func TestOptSetIPFSPathWithConfig(t *testing.T) {
 
 func TestOptSetIPFSPathEmptyConfig(t *testing.T) {
 	// nil should error
-	var o *[]MuxConfig
+	var o *[]qfs.Config
 	path := "test/path"
 	if err := OptSetIPFSPath(path)(o); err == nil {
-		t.Errorf("expected error when using nil MuxConfig, but didn't get one")
+		t.Errorf("expected error when using nil qfs.Config, but didn't get one")
 		return
 	}
 
 	// test empty muxConfig
-	o = &[]MuxConfig{}
+	o = &[]qfs.Config{}
 	if err := OptSetIPFSPath(path)(o); err != nil {
 		t.Errorf("unexpected error when setting ipfs path: %s", err)
 		return
 	}
 
-	var ipfscfg MuxConfig
+	var ipfscfg qfs.Config
 
 	if len(*o) != 1 {
-		t.Errorf("expected MuxConfig slice to have length 1, got %d", len(*o))
+		t.Errorf("expected qfs.Config slice to have length 1, got %d", len(*o))
 		return
 	}
 	for _, mc := range *o {
@@ -119,7 +119,7 @@ func TestOptSetIPFSPathEmptyConfig(t *testing.T) {
 		}
 	}
 	if ipfscfg.Type != "ipfs" {
-		t.Errorf("expected MuxConfig of type 'ipfs' to exist, got %s", ipfscfg.Type)
+		t.Errorf("expected qfs.Config of type 'ipfs' to exist, got %s", ipfscfg.Type)
 		return
 	}
 	gotPath, ok := ipfscfg.Config["path"]
@@ -154,7 +154,7 @@ func TestCAFSFromIPFS(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	cfg := []MuxConfig{
+	cfg := []qfs.Config{
 		{Type: "ipfs", Config: map[string]interface{}{"path": path}},
 	}
 	mfs, err := New(ctx, cfg)
@@ -175,7 +175,7 @@ func TestRepoLockPerContext(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := []MuxConfig{
+	cfg := []qfs.Config{
 		{
 			Type: "ipfs",
 			Config: map[string]interface{}{

@@ -20,8 +20,6 @@ type PathResolver interface {
 }
 
 // Filesystem abstracts & unifies filesystem-like behaviour
-// For now it's just a wrapper around PathResolver, but it'll expand once we merge
-// write-like functionality from cafs
 type Filesystem interface {
 	// Get fetching files and directories from path strings.
 	// in practice path strings can be things like:
@@ -37,10 +35,16 @@ type Filesystem interface {
 	Delete(ctx context.Context, path string) (err error)
 }
 
-// FSConstructor is a function that creates a filesystem from a config map
+// Config binds a filesystem type to a configuration map
+type Config struct {
+	Type   string                 `json:"type"`
+	Config map[string]interface{} `json:"config,omitempty"`
+}
+
+// Constructor is a function that creates a filesystem from a config map
 // the passed in context should last for the duration of the existence of the
 // store. Any resources allocated by the store should be scoped to this context
-type FSConstructor func(ctx context.Context, cfg map[string]interface{}) (Filesystem, error)
+type Constructor func(ctx context.Context, cfg map[string]interface{}) (Filesystem, error)
 
 // ReleasingFilesystem provides a channel to signal cleanup is finished. It
 // sends after a filesystem has closed & about to release all it's resources

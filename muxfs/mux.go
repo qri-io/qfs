@@ -45,19 +45,8 @@ func (m *Mux) GetHandler(pathKind string) (qfs.Filesystem, bool) {
 	return resolver, ok
 }
 
-// Option is a function that manipulates config details when fed to New(). Fields on
-// the o parameter may be null, functions cannot assume the Config is non-null.
-type Option func(o *[]MuxConfig) error
-
-// MuxConfig contains the information needed to create a new filesystem
-type MuxConfig struct {
-	Type   string                 `json:"type"`
-	Config map[string]interface{} `json:"config,omitempty"`
-	Source string                 `json:"source,omitempty"`
-}
-
 // constructors maps filesystem type strings to constructor functions
-var constructors = map[string]qfs.FSConstructor{
+var constructors = map[string]qfs.Constructor{
 	"ipfs":  qipfs.NewFilesystem,
 	"local": localfs.NewFilesystem,
 	"http":  httpfs.NewFilesystem,
@@ -68,16 +57,7 @@ var constructors = map[string]qfs.FSConstructor{
 // New creates a new Mux Filesystem, if no Option funcs are provided,
 // New uses a default set of Option funcs. Any Option functions passed to this
 // function must check whether their fields are nil or not.
-func New(ctx context.Context, cfgs []MuxConfig, opts ...Option) (*Mux, error) {
-	if cfgs == nil {
-		return nil, fmt.Errorf("config is required")
-	}
-
-	for _, opt := range opts {
-		if err := opt(&cfgs); err != nil {
-			return nil, err
-		}
-	}
+func New(ctx context.Context, cfgs []qfs.Config) (*Mux, error) {
 	mux := &Mux{
 		handlers: map[string]qfs.Filesystem{},
 		doneCh:   make(chan struct{}),
@@ -162,31 +142,6 @@ func (m *Mux) Delete(ctx context.Context, path string) (err error) {
 	}
 
 	return handler.Delete(ctx, path)
-}
-
-// OptSetIPFSPath allows you to set an ipfs path for the ipfs filesystem
-func OptSetIPFSPath(path string) Option {
-	return func(o *[]MuxConfig) error {
-		if o == nil {
-			return fmt.Errorf("cannot have nil options for a Mux Filesystem")
-		}
-		ipfs := &MuxConfig{}
-		for _, mc := range *o {
-			if mc.Type == "ipfs" {
-				ipfs = &mc
-				break
-			}
-		}
-		if ipfs.Config == nil {
-			ipfs.Config = map[string]interface{}{}
-		}
-		ipfs.Config["path"] = path
-		if ipfs.Type == "" {
-			ipfs.Type = "ipfs"
-			*o = append(*o, *ipfs)
-		}
-		return nil
-	}
 }
 
 // CAFSStoreFromIPFS takes the ipfs file store and returns it as a
