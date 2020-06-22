@@ -51,6 +51,14 @@ func NewFilesystem(_ context.Context, cfgMap map[string]interface{}) (qfs.Filesy
 	return NewFS(cfgMap)
 }
 
+// FS is a implementation of qfs.PathResolver that uses the local filesystem
+type FS struct {
+	cfg *FSConfig
+}
+
+// compile-time assertion that MapStore satisfies the Filesystem interface
+var _ qfs.Filesystem = (*FS)(nil)
+
 // NewFS creates a new local filesytem PathResolver
 func NewFS(cfgMap map[string]interface{}, opts ...Option) (qfs.Filesystem, error) {
 	cfg, err := mapToConfig(cfgMap)
@@ -65,13 +73,13 @@ func NewFS(cfgMap map[string]interface{}, opts ...Option) (qfs.Filesystem, error
 	return &FS{cfg: cfg}, nil
 }
 
-// FS is a implementation of qfs.PathResolver that uses the local filesystem
-type FS struct {
-	cfg *FSConfig
-}
+// FilestoreType uniquely identifies this filestore
+const FilestoreType = "http"
 
-// compile-time assertion that MapStore satisfies the Filesystem interface
-var _ qfs.Filesystem = (*FS)(nil)
+// Type distinguishes this filesystem from others by a unique string prefix
+func (httpfs *FS) Type() string {
+	return FilestoreType
+}
 
 // Get implements qfs.PathResolver
 func (httpfs *FS) Get(ctx context.Context, path string) (qfs.File, error) {

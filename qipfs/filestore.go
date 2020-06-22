@@ -80,6 +80,7 @@ func NewFilesystem(ctx context.Context, cfgMap map[string]interface{}) (qfs.File
 			// attempt to create and return an `qipfs_http` filesystem istead
 			return qipfs_http.NewFilesystem(map[string]interface{}{"url": cfg.URL})
 		}
+		log.Errorf("opening %q: %s", cfg.Path, err)
 		return nil, err
 	}
 
@@ -139,11 +140,12 @@ func NewFilesystemFromNode(node *core.IpfsNode) (qfs.Filesystem, error) {
 	}, nil
 }
 
-const prefix = "ipfs"
+// FilestoreType uniquely identifies this filestore
+const FilestoreType = "ipfs"
 
-// PathPrefix returns the muxing prefix this filesystem handles: "ipfs"
-func (fst Filestore) PathPrefix() string {
-	return prefix
+// Type distinguishes this filesystem from others by a unique string prefix
+func (fst Filestore) Type() string {
+	return FilestoreType
 }
 
 // Done implements the qfs.ReleasingFilesystem interface
@@ -383,7 +385,7 @@ func (fst *Filestore) NewAdder(pin, wrap bool) (cafs.Adder, error) {
 }
 
 func pathFromHash(hash string) string {
-	return fmt.Sprintf("/%s/%s", prefix, hash)
+	return fmt.Sprintf("/%s/%s", FilestoreType, hash)
 }
 
 // AddFile adds a file to the top level IPFS Node

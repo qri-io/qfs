@@ -25,7 +25,7 @@ func TestDefaultNewMux(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	cfg := []MuxConfig{
+	cfg := []qfs.Config{
 		{Type: "ipfs", Config: map[string]interface{}{"path": path}},
 		{Type: "http"},
 		{Type: "local"},
@@ -37,105 +37,26 @@ func TestDefaultNewMux(t *testing.T) {
 		t.Errorf("error creating new mux: %s", err)
 		return
 	}
-	if _, err := GetResolver(mfs, "ipfs"); err != nil {
-		t.Errorf(err.Error())
-	}
-	if _, err := GetResolver(mfs, "http"); err != nil {
-		t.Errorf(err.Error())
-	}
-	if _, err := GetResolver(mfs, "local"); err != nil {
-		t.Errorf(err.Error())
-	}
-	if _, err := GetResolver(mfs, "mem"); err != nil {
-		t.Errorf(err.Error())
-	}
-	if _, err := GetResolver(mfs, "map"); err != nil {
-		t.Errorf(err.Error())
-	}
-}
-
-func TestOptSetIPFSPathWithConfig(t *testing.T) {
-	// test empty muxConfig
-	o := &[]MuxConfig{
-		{
-			Type:   "ipfs",
-			Config: map[string]interface{}{"path": "bad/path"},
-		},
-	}
-	path := "test/path"
-	OptSetIPFSPath(path)(o)
-	var ipfscfg MuxConfig
-
-	if len(*o) != 1 {
-		t.Errorf("expected MuxConfig slice to have length 1, got %d", len(*o))
-		return
-	}
-	for _, mc := range *o {
-		if mc.Type == "ipfs" {
-			ipfscfg = mc
-			break
+	for _, fsType := range []string{
+		"ipfs",
+		"http",
+		"local",
+		"mem",
+		"map",
+	} {
+		if mfs.Filesystem(fsType) == nil {
+			t.Errorf("expected filesystem for %q, got nil", fsType)
 		}
 	}
-	if ipfscfg.Type != "ipfs" {
-		t.Errorf("expected MuxConfig of type 'ipfs' to exist, got %s", ipfscfg.Type)
-		return
-	}
-	gotPath, ok := ipfscfg.Config["path"]
-	if !ok {
-		t.Errorf("expected ipfs map[string]interface config to have field 'fsRepoPath', but it does not")
-		return
-	}
-	if gotPath != path {
-		t.Errorf("expected fsRepoPath to be '%s', got '%s'", path, gotPath)
+	if mfs.Filesystem("nonexistent") != nil {
+		t.Errorf("expected nonexistent filesystem to return nil")
 	}
 }
 
-func TestOptSetIPFSPathEmptyConfig(t *testing.T) {
-	// nil should error
-	var o *[]MuxConfig
-	path := "test/path"
-	if err := OptSetIPFSPath(path)(o); err == nil {
-		t.Errorf("expected error when using nil MuxConfig, but didn't get one")
-		return
-	}
-
-	// test empty muxConfig
-	o = &[]MuxConfig{}
-	if err := OptSetIPFSPath(path)(o); err != nil {
-		t.Errorf("unexpected error when setting ipfs path: %s", err)
-		return
-	}
-
-	var ipfscfg MuxConfig
-
-	if len(*o) != 1 {
-		t.Errorf("expected MuxConfig slice to have length 1, got %d", len(*o))
-		return
-	}
-	for _, mc := range *o {
-		if mc.Type == "ipfs" {
-			ipfscfg = mc
-			break
-		}
-	}
-	if ipfscfg.Type != "ipfs" {
-		t.Errorf("expected MuxConfig of type 'ipfs' to exist, got %s", ipfscfg.Type)
-		return
-	}
-	gotPath, ok := ipfscfg.Config["path"]
-	if !ok {
-		t.Errorf("expected ipfs map[string]interface config to have field 'path', but it does not")
-		return
-	}
-	if gotPath != path {
-		t.Errorf("expected fsRepoPath to be '%s', got '%s'", path, gotPath)
-	}
-}
-
-func TestCAFSFromIPFS(t *testing.T) {
+func TestDefaultWriteFS(t *testing.T) {
 	// create a mux that does NOT hav an ipfsFS
 	mfs := &Mux{}
-	ipfsFS := mfs.CAFSStoreFromIPFS()
+	ipfsFS := mfs.DefaultWriteFS()
 	if ipfsFS != nil {
 		t.Errorf("expected nil return on an empty mux fs")
 	}
@@ -154,7 +75,7 @@ func TestCAFSFromIPFS(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	cfg := []MuxConfig{
+	cfg := []qfs.Config{
 		{Type: "ipfs", Config: map[string]interface{}{"path": path}},
 	}
 	mfs, err := New(ctx, cfg)
@@ -162,7 +83,7 @@ func TestCAFSFromIPFS(t *testing.T) {
 		t.Errorf("error creating new mux")
 		return
 	}
-	ipfsFS = mfs.CAFSStoreFromIPFS()
+	ipfsFS = mfs.DefaultWriteFS()
 	if ipfsFS == nil {
 		t.Errorf("expected ipfsFS to exist, got nil")
 		return
@@ -175,7 +96,7 @@ func TestRepoLockPerContext(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := []MuxConfig{
+	cfg := []qfs.Config{
 		{
 			Type: "ipfs",
 			Config: map[string]interface{}{

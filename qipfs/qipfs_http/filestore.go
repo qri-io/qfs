@@ -61,10 +61,12 @@ func (fst *Filestore) IPFSCoreAPI() coreiface.CoreAPI {
 	return fst.capi
 }
 
-const prefix = "ipfs"
+// FilestoreType uniquely identifies this filestore
+const FilestoreType = "ipfs"
 
-func (fst Filestore) PathPrefix() string {
-	return prefix
+// Type distinguishes this filesystem from others by a unique string prefix
+func (fst Filestore) Type() string {
+	return FilestoreType
 }
 
 // Online always returns true
@@ -128,7 +130,7 @@ func (fst *Filestore) NewAdder(pin, wrap bool) (cafs.Adder, error) {
 }
 
 func pathFromHash(hash string) string {
-	return fmt.Sprintf("/%s/%s", prefix, hash)
+	return fmt.Sprintf("/%s/%s", FilestoreType, hash)
 }
 
 // AddFile adds a file to the top level IPFS Node

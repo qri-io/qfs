@@ -20,13 +20,13 @@ func NewMemFilesystem(_ context.Context, cfg map[string]interface{}) (Filesystem
 }
 
 // NewMemFS allocates an instance of a mapstore
-func NewMemFS() *MapStore {
-	return &MapStore{
+func NewMemFS() *MemStore {
+	return &MemStore{
 		Files: make(map[string]filer),
 	}
 }
 
-// MapStore implements Filestore in-memory as a map
+// MemStore implements Filestore in-memory as a map
 //
 // An example pulled from tests will create a tree of "cafs"
 // with directories & cafs, with paths properly set:
@@ -42,22 +42,25 @@ func NewMemFS() *MapStore {
 // )
 // File is an interface that provides functionality for handling
 // cafs/directories as values that can be supplied to commands.
-type MapStore struct {
+type MemStore struct {
 	Pinned  bool
-	Network []*MapStore
+	Network []*MemStore
 	Files   map[string]filer
 }
 
-// compile-time assertion that MapStore satisfies the Filesystem interface
-var _ Filesystem = (*MapStore)(nil)
+// compile-time assertion that MemStore satisfies the Filesystem interface
+var _ Filesystem = (*MemStore)(nil)
 
-// PathPrefix returns the prefix on paths in the store
-func (m MapStore) PathPrefix() string {
-	return "memfs"
+// MemFilestoreType uniquely identifies the mem filestore
+const MemFilestoreType = "mem"
+
+// Type distinguishes this filesystem from others by a unique string prefix
+func (m MemStore) Type() string {
+	return MemFilestoreType
 }
 
 // Print converts the store to a string
-func (m MapStore) Print() (string, error) {
+func (m MemStore) Print() (string, error) {
 	buf := &bytes.Buffer{}
 	for key, file := range m.Files {
 		data, err := ioutil.ReadAll(file.File())
@@ -71,7 +74,7 @@ func (m MapStore) Print() (string, error) {
 }
 
 // Put adds a file to the store
-func (m *MapStore) Put(ctx context.Context, file File) (key string, err error) {
+func (m *MemStore) Put(ctx context.Context, file File) (key string, err error) {
 	if file.IsDirectory() {
 		buf := bytes.NewBuffer(nil)
 		dir := fsDir{
@@ -130,15 +133,15 @@ func (m *MapStore) Put(ctx context.Context, file File) (key string, err error) {
 }
 
 // Get returns a File from the store
-func (m *MapStore) Get(ctx context.Context, key string) (File, error) {
-	// key may be of the form /map/QmFoo/file.json but MapStore indexes its maps
+func (m *MemStore) Get(ctx context.Context, key string) (File, error) {
+	// key may be of the form /map/QmFoo/file.json but MemStore indexes its maps
 	// using keys like /map/QmFoo. Trim after the second part of the key.
 	parts := strings.Split(key, "/")
 	if len(parts) > 2 {
 		prefix := strings.Join([]string{"", parts[1], parts[2]}, "/")
 		key = prefix
 	}
-	// Check if the local MapStore has the file.
+	// Check if the local MemStore has the file.
 	f, err := m.getLocal(key)
 	if err == nil {
 		return f, nil
@@ -149,7 +152,7 @@ func (m *MapStore) Get(ctx context.Context, key string) (File, error) {
 	return nil, ErrNotFound
 }
 
-func (m *MapStore) getLocal(key string) (File, error) {
+func (m *MemStore) getLocal(key string) (File, error) {
 	if m.Files[key] == nil {
 		return nil, ErrNotFound
 	}
@@ -157,7 +160,7 @@ func (m *MapStore) getLocal(key string) (File, error) {
 }
 
 // Has returns whether the store has a File with the key
-func (m MapStore) Has(ctx context.Context, key string) (exists bool, err error) {
+func (m MemStore) Has(ctx context.Context, key string) (exists bool, err error) {
 	if m.Files[key] == nil {
 		return false, nil
 	}
@@ -165,7 +168,7 @@ func (m MapStore) Has(ctx context.Context, key string) (exists bool, err error) 
 }
 
 // Delete removes the file from the store with the key
-func (m MapStore) Delete(ctx context.Context, key string) error {
+func (m MemStore) Delete(ctx context.Context, key string) error {
 	delete(m.Files, key)
 	return nil
 }
@@ -196,7 +199,7 @@ func (f fsFile) File() File {
 }
 
 type fsDir struct {
-	store *MapStore
+	store *MemStore
 	path  string
 	files []string
 }

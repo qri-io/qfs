@@ -25,7 +25,7 @@ type Filestore interface {
 	// Put places a file or a directory in the store.
 	// The most notable difference from a standard file store is the store itself
 	// determines the resulting path. paths returned by put must be prefixed with
-	// the PathPrefix:
+	// the type:
 	// eg. /ipfs/QmZ3KfGaSrb3cnTriJbddCzG7hwQi2j6km7Xe7hVpnsW5S
 	Put(ctx context.Context, file qfs.File) (path string, err error)
 
@@ -49,10 +49,10 @@ type Filestore interface {
 	// "wrap" sets weather the top level should be wrapped in a directory
 	NewAdder(pin, wrap bool) (Adder, error)
 
-	// PathPrefix is a top-level identifier to distinguish between filestores,
+	// Type is a top-level identifier to distinguish between filestores,
 	// for exmple: the "ipfs" in /ipfs/QmZ3KfGaSrb3cnTriJbddCzG7hwQi2j6km7Xe7hVpnsW5S
 	// a Filestore implementation should always return the same
-	PathPrefix() string
+	Type() string
 }
 
 // Fetcher is the interface for getting files from a remote source
