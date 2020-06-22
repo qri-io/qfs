@@ -17,8 +17,8 @@ func TestMemFilestore(t *testing.T) {
 	// }
 }
 
-func TestPathPrefix(t *testing.T) {
-	got := cafs.NewMapstore().PathPrefix()
+func TestType(t *testing.T) {
+	got := cafs.NewMapstore().Type()
 	if "map" != got {
 		t.Errorf("path prefix mismatch. expected: 'map', got: %s", got)
 	}

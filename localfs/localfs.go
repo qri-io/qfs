@@ -76,6 +76,14 @@ type FS struct {
 // compile-time assertion that MapStore satisfies the Filesystem interface
 var _ qfs.Filesystem = (*FS)(nil)
 
+// FilestoreType uniquely identifies this filestore
+const FilestoreType = "local"
+
+// Type distinguishes this filesystem from others by a unique string prefix
+func (lfs *FS) Type() string {
+	return FilestoreType
+}
+
 // Get implements qfs.PathResolver
 func (lfs *FS) Get(ctx context.Context, path string) (qfs.File, error) {
 	fi, err := os.Stat(path)

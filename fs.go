@@ -21,6 +21,11 @@ type PathResolver interface {
 
 // Filesystem abstracts & unifies filesystem-like behaviour
 type Filesystem interface {
+	// Type returns a string identifier that distinguishes a filesystem from
+	// all other implementations, example identifiers include: "local", "ipfs",
+	// and "http"
+	// types are used as path prefixes when multiplexing filesystems
+	Type() string
 	// Get fetching files and directories from path strings.
 	// in practice path strings can be things like:
 	// * a local filesystem

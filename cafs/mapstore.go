@@ -57,9 +57,12 @@ type MapStore struct {
 	Files   map[string]filer
 }
 
-// PathPrefix returns the prefix on paths in the store
-func (m MapStore) PathPrefix() string {
-	return "map"
+// MapFilestoreType uniquely identifies the map filestore
+const MapFilestoreType = "map"
+
+// Type distinguishes this filesystem from others by a unique string prefix
+func (m MapStore) Type() string {
+	return MapFilestoreType
 }
 
 // AddConnection sets up pointers from this MapStore to that, and vice versa.

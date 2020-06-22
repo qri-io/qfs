@@ -30,9 +30,9 @@ func EnsureFilestoreSingleFileBehavior(f cafs.Filestore) error {
 		return fmt.Errorf("Filestore.Put(%s) error: %s", file.FileName(), err.Error())
 	}
 
-	pre := "/" + f.PathPrefix() + "/"
+	pre := "/" + f.Type() + "/"
 	if !strings.HasPrefix(key, pre) {
-		return fmt.Errorf("key returned didn't return a that matches this Filestore's PathPrefix. Expected: %s/..., got: %s", pre, key)
+		return fmt.Errorf("key returned didn't return a that matches this Filestore's Type. Expected: %s/..., got: %s", pre, key)
 	}
 
 	outf, err := f.Get(ctx, key)
