@@ -18,8 +18,7 @@ type Mux struct {
 	handlers map[string]qfs.Filesystem
 	// sophisticated writes require a legacy cafs.Filesystem interface
 	// the first configured filesystem that implements cafs.Filesystem
-	// will be set to this string, and returned by the CAFS method, creating a
-	// default write destination
+	// will be set to this string, and returned by the DefaultWriteFS method
 	defaultWriteDestination string
 
 	doneCh  chan struct{}
@@ -30,7 +29,7 @@ type Mux struct {
 // compile-time assertion that MapStore satisfies the Filesystem interface
 var _ qfs.Filesystem = (*Mux)(nil)
 
-// SetHandler designates the resolver for a given path kind string
+// SetFilesystem designates the resolver for a given path kind string
 func (m *Mux) SetFilesystem(fs qfs.Filesystem) error {
 	if m.handlers == nil {
 		m.handlers = map[string]qfs.Filesystem{}
@@ -58,8 +57,8 @@ func (m *Mux) SetFilesystem(fs qfs.Filesystem) error {
 	return nil
 }
 
-// Filesystem returns the filesystem for a given fs type string and a bool
-// if the resolver exists on the muxfs
+// Filesystem returns the filesystem for a given fs type string, nil if no
+// filesystem for fsType exists
 func (m *Mux) Filesystem(fsType string) qfs.Filesystem {
 	return m.handlers[fsType]
 }
@@ -76,6 +75,8 @@ var constructors = map[string]qfs.Constructor{
 // New creates a new Mux Filesystem, if no Option funcs are provided,
 // New uses a default set of Option funcs. Any Option functions passed to this
 // function must check whether their fields are nil or not.
+// The first configured filesystem that implements the cafs.Filestore interface
+// becomes the default filesystem returned by DefaultWriteFS
 func New(ctx context.Context, cfgs []qfs.Config) (*Mux, error) {
 	mux := &Mux{
 		handlers: map[string]qfs.Filesystem{},
@@ -102,40 +103,6 @@ func New(ctx context.Context, cfgs []qfs.Config) (*Mux, error) {
 	}()
 
 	return mux, nil
-}
-
-// Compose creates a new path muxer from a set of filesystems
-func Compose(fss ...qfs.Filesystem) *Mux {
-	// TODO (b5) - finish
-	mux := &Mux{
-		handlers: map[string]qfs.Filesystem{},
-		doneCh:   make(chan struct{}),
-	}
-
-	for _, fs := range fss {
-		mux.handlers[fs.Type()] = fs
-
-		if releaser, ok := fs.(qfs.ReleasingFilesystem); ok {
-			mux.doneWg.Add(1)
-			go func(releaser qfs.ReleasingFilesystem) {
-				<-releaser.Done()
-				mux.doneErr = releaser.DoneErr()
-				mux.doneWg.Done()
-			}(releaser)
-		}
-		if mux.defaultWriteDestination == "" {
-			if _, ok := fs.(cafs.Filestore); ok {
-				mux.defaultWriteDestination = fs.Type()
-			}
-		}
-	}
-
-	go func() {
-		mux.doneWg.Wait()
-		close(mux.doneCh)
-	}()
-
-	return mux
 }
 
 // FilestoreType uniquely identifies the mux filestore
