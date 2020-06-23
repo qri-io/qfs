@@ -10,8 +10,7 @@ import (
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	path "github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/mitchellh/mapstructure"
-
-	httpapi "github.com/ipfs/go-ipfs-http-client"
+	httpapi "github.com/qri-io/go-ipfs-http-client"
 	qfs "github.com/qri-io/qfs"
 	cafs "github.com/qri-io/qfs/cafs"
 	files "github.com/qri-io/qfs/qipfs/go-ipfs-files"
