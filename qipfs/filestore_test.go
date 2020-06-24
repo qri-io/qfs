@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/qri-io/qfs"
 	"github.com/qri-io/qfs/cafs"
 	"github.com/qri-io/qfs/cafs/test"
@@ -19,17 +20,8 @@ func TestFS(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	path := filepath.Join(os.TempDir(), "ipfs_cafs_test")
-	if err := os.MkdirAll(path, os.ModePerm); err != nil {
-		t.Errorf("error creating temp dir: %s", err.Error())
-		return
-	}
+	path := InitTestRepo(t)
 	defer os.RemoveAll(path)
-
-	if err := InitRepo(path, ""); err != nil {
-		t.Errorf("error intializing repo: %s", err.Error())
-		return
-	}
 
 	f, err := NewFilesystem(ctx, map[string]interface{}{
 		"online": false,
@@ -70,18 +62,8 @@ func TestCreatedWithAPIAddrFS(t *testing.T) {
 	ctx, done := context.WithCancel(context.Background())
 	defer done()
 
-	path := filepath.Join(os.TempDir(), "ipfs_cafs_test_api_addr")
-	if err := os.MkdirAll(path, os.ModePerm); err != nil {
-		t.Errorf("error creating temp dir: %s", err.Error())
-		return
-	}
+	path := InitTestRepo(t)
 	defer os.RemoveAll(path)
-
-	// create an repo
-	if err := InitRepo(path, ""); err != nil {
-		t.Errorf("error intializing repo: %s", err.Error())
-		return
-	}
 
 	// create an ipfs fs with that repo
 	_, err := NewFilesystem(ctx, map[string]interface{}{
@@ -183,5 +165,74 @@ func BenchmarkRead(b *testing.B) {
 			break
 		}
 	}
+}
 
+func TestPinsetDifference(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	path := InitTestRepo(t)
+	defer os.RemoveAll(path)
+
+	f, err := NewFilesystem(ctx, map[string]interface{}{"path": path})
+	if err != nil {
+		t.Fatalf("creating filestore: %s", err.Error())
+		return
+	}
+
+	fs := f.(*Filestore)
+	filter := map[string]struct{}{}
+	pinsch, err := fs.PinsetDifference(ctx, filter)
+	if err != nil {
+		t.Error(err)
+	}
+
+	got := map[string]struct{}{}
+	for path := range pinsch {
+		got[path] = struct{}{}
+	}
+
+	expect := map[string]struct{}{
+		"/ipld/QmQPeNsJPyVWPFDVHb77w8G42Fvo15z4bG2X8D2GhfbSXc": {},
+		"/ipld/QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn": {},
+	}
+	if diff := cmp.Diff(expect, got); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	filter = map[string]struct{}{
+		"/ipld/QmQPeNsJPyVWPFDVHb77w8G42Fvo15z4bG2X8D2GhfbSXc": {},
+	}
+	pinsch, err = fs.PinsetDifference(ctx, filter)
+	if err != nil {
+		t.Error(err)
+	}
+
+	got = map[string]struct{}{}
+	for path := range pinsch {
+		got[path] = struct{}{}
+	}
+
+	expect = map[string]struct{}{
+		"/ipld/QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn": {},
+	}
+	if diff := cmp.Diff(expect, got); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// InitTestRepo caretes a repo at the given path
+func InitTestRepo(t *testing.T) string {
+	path, err := ioutil.TempDir("", t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(path, os.ModePerm); err != nil {
+		t.Fatalf("error creating temp dir: %s", err.Error())
+	}
+	if err := InitRepo(path, ""); err != nil {
+		t.Fatalf("error intializing repo: %s", err.Error())
+	}
+
+	return path
 }
