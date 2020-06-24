@@ -23,6 +23,7 @@ import (
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
 	logging "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
+	caopts "github.com/ipfs/interface-go-ipfs-core/options"
 	"github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/qri-io/qfs"
 	cafs "github.com/qri-io/qfs/cafs"
@@ -31,7 +32,7 @@ import (
 )
 
 var (
-	log = logging.Logger("cafs/ipfs")
+	log = logging.Logger("qipfs")
 	// ErrNoRepoPath is returned when no repo path is provided in the config
 	ErrNoRepoPath = errors.New("must provide a repo path ('path') to initialize an ipfs filesystem")
 )
@@ -468,6 +469,43 @@ func (fst *Filestore) Pin(ctx context.Context, cid string, recursive bool) error
 
 func (fst *Filestore) Unpin(ctx context.Context, cid string, recursive bool) error {
 	return fst.capi.Pin().Rm(ctx, path.New(cid))
+}
+
+// PinsetDifference returns a map of "Recursive"-pinned hashes that are not in
+// the given set of hash keys. The returned set is a list of all data
+func (fst *Filestore) PinsetDifference(ctx context.Context, set map[string]struct{}) (<-chan string, error) {
+	resCh := make(chan string, 10)
+	res, err := fst.capi.Pin().Ls(ctx, func(o *caopts.PinLsSettings) error {
+		o.Type = "recursive"
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		defer close(resCh)
+	LOOP:
+		for {
+			select {
+			case p, ok := <-res:
+				if !ok {
+					break LOOP
+				}
+
+				str := p.Path().String()
+				if _, ok := set[str]; !ok {
+					// send on channel if path is not in set
+					resCh <- str
+				}
+			case <-ctx.Done():
+				log.Debug(ctx.Err())
+				break LOOP
+			}
+		}
+	}()
+
+	return resCh, nil
 }
 
 type wrapFile struct {
