@@ -221,7 +221,7 @@ func TestPinsetDifference(t *testing.T) {
 	}
 }
 
-// InitTestRepo caretes a repo at the given path
+// InitTestRepo creates a repo at the given path
 func InitTestRepo(t *testing.T) string {
 	path, err := ioutil.TempDir("", t.Name())
 	if err != nil {

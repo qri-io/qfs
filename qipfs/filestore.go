@@ -102,43 +102,27 @@ func NewFilesystem(ctx context.Context, cfgMap map[string]interface{}) (qfs.File
 		doneCh: make(chan struct{}),
 	}
 
-	go func(fst *Filestore) {
-		<-ctx.Done()
-		fst.doneErr = ctx.Err()
-		log.Debugf("closing repo at %q", cfg.Path)
-		if err := cfg.Repo.Close(); err != nil {
-			log.Error(err)
-		}
-		for {
-			daemonLocked, err := fsrepo.LockedByOtherProcess(cfg.Path)
-			if err != nil {
-				log.Error(err)
-				break
-			} else if daemonLocked {
-				log.Errorf("fsrepo is still locked")
-				time.Sleep(time.Millisecond * 25)
-				continue
-			}
-			break
-		}
-		log.Debugf("closed repo at %q", cfg.Path)
-		close(fst.doneCh)
-	}(fst)
+	go fst.handleContextClose(ctx)
 
 	return fst, nil
 }
 
 // NewFilesystemFromNode wraps an existing IPFS node with a qfs.Filesystem
-func NewFilesystemFromNode(node *core.IpfsNode) (qfs.Filesystem, error) {
+func NewFilesystemFromNode(ctx context.Context, node *core.IpfsNode) (qfs.Filesystem, error) {
 	capi, err := coreapi.NewCoreAPI(node)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Filestore{
-		node: node,
-		capi: capi,
-	}, nil
+	fst := &Filestore{
+		node:   node,
+		capi:   capi,
+		doneCh: make(chan struct{}),
+	}
+
+	go fst.handleContextClose(ctx)
+
+	return fst, nil
 }
 
 // FilestoreType uniquely identifies this filestore
@@ -506,6 +490,34 @@ func (fst *Filestore) PinsetDifference(ctx context.Context, set map[string]struc
 	}()
 
 	return resCh, nil
+}
+
+func (fst *Filestore) handleContextClose(ctx context.Context) {
+	<-ctx.Done()
+	fst.doneErr = ctx.Err()
+	log.Debugf("closing repo")
+
+	if err := fst.node.Repo.Close(); err != nil {
+		log.Error(err)
+	}
+
+	if fsr, ok := fst.node.Repo.(*fsrepo.FSRepo); ok {
+		for {
+			daemonLocked, err := fsrepo.LockedByOtherProcess(fsr.Path())
+			if err != nil {
+				log.Error(err)
+				break
+			} else if daemonLocked {
+				log.Errorf("fsrepo is still locked")
+				time.Sleep(time.Millisecond * 25)
+				continue
+			}
+			break
+		}
+		log.Debugf("closed repo at %q", fsr.Path())
+	}
+
+	close(fst.doneCh)
 }
 
 type wrapFile struct {
