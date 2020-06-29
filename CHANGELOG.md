@@ -1,3 +1,11 @@
+<a name="v0.5.0"></a>
+# [v0.5.0](https://github.com/qri-io/qfs/compare/v0.4.2...v0.5.0) (2020-06-29)
+
+This release is jumping to v0.5.0 to skip a bad version (v0.4.2 was publishe in error, don't use!)
+
+v0.5.0 overhauls a bunch of APIS and introduces all sorts of breaking changes.
+
+
 <a name="0.1.0"></a>
 #  (2019-06-03)
 
