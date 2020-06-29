@@ -103,6 +103,23 @@ func doInit(out io.Writer, repoRoot string, empty bool, nBitsForKeypair int, con
 		if err != nil {
 			return err
 		}
+		// qri uses different default addresses
+		conf.Addresses = config.Addresses{
+			Swarm: []string{
+				"/ip4/0.0.0.0/tcp/0",
+				"/ip6/::/tcp/0",
+				"/ip4/0.0.0.0/udp/0/quic",
+				"/ip6/::/udp/0/quic",
+			},
+			Announce:   []string{},
+			NoAnnounce: []string{},
+			API: config.Strings{
+				"/ip4/127.0.0.1/tcp/0",
+			},
+			Gateway: config.Strings{
+				"/ip4/127.0.0.1/tcp/0",
+			},
+		}
 	}
 
 	if err := applyProfiles(conf, confProfiles); err != nil {
