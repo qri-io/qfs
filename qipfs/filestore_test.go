@@ -221,6 +221,50 @@ func TestPinsetDifference(t *testing.T) {
 	}
 }
 
+// TestDisableBootstrap should test that the DisableBootstrap option
+// does not permanently remove the bootstrap addrs from the ipfs config
+func TestDisableBootstrap(t *testing.T) {
+	path := InitTestRepo(t)
+	// inspect initial configuration, ensure there are bootstrap addrs
+	data, err := ioutil.ReadFile(filepath.Join(path, "config"))
+	if err != nil {
+		t.Fatalf("error opening config file: %s", err)
+	}
+
+	cfg := map[string]interface{}{}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("error unmarshaling config: %s", err)
+	}
+	bootstrapAddrs := cfg["Bootstrap"].([]interface{})
+	if len(bootstrapAddrs) == 0 {
+		t.Fatalf("error: config starts with no Bootstrap addrs")
+	}
+
+	// create a new fs with the disableBootstrap flag
+	ctx, cancel := context.WithCancel(context.Background())
+	_, err = NewFilesystem(ctx, map[string]interface{}{
+		"path":             path,
+		"disableBootstrap": true,
+	})
+	if err != nil {
+		t.Fatalf("error creating new filesystem: %s", err)
+	}
+	cancel()
+
+	// inspect the configuration again, make sure the Bootstrap addrs have not been removed
+	data, err = ioutil.ReadFile(filepath.Join(path, "config"))
+	if err != nil {
+		t.Fatalf("error opening config file after creating new filesystem: %s", err)
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("error unmarshaling config after creating new filesystem: %s", err)
+	}
+	bootstrapAddrs = cfg["Bootstrap"].([]interface{})
+	if len(bootstrapAddrs) == 0 {
+		t.Fatalf("error: creating new filesystem with the 'disableBootstrap' flag has removed the underlying Bootstrap addresses")
+	}
+}
+
 // InitTestRepo creates a repo at the given path
 func InitTestRepo(t *testing.T) string {
 	path, err := ioutil.TempDir("", t.Name())

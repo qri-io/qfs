@@ -24,6 +24,8 @@ type StoreCfg struct {
 	// enable experimental IPFS pubsub service. does not apply when
 	// operating over HTTP via a URL
 	EnablePubSub bool
+	// DisableBootstrap will remove the bootstrap addrs from the node
+	DisableBootstrap bool
 }
 
 func mapToConfig(cfgmap map[string]interface{}) (*StoreCfg, error) {
