@@ -90,6 +90,14 @@ func NewFilesystem(ctx context.Context, cfgMap map[string]interface{}) (qfs.File
 		return nil, fmt.Errorf("error creating ipfs node: %s", err.Error())
 	}
 
+	if cfg.DisableBootstrap {
+		repoCfg, err := node.Repo.Config()
+		if err != nil {
+			return nil, err
+		}
+		repoCfg.Bootstrap = []string{}
+	}
+
 	capi, err := coreapi.NewCoreAPI(node)
 	if err != nil {
 		return nil, err
