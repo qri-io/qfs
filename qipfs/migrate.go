@@ -63,7 +63,10 @@ func InternalizeIPFSRepo(ipfsRepoPath, newRepoPath string) error {
 
 	// move migrated repo to new location
 	if err := os.Rename(tmpDir, newRepoPath); err != nil {
-		return fmt.Errorf("error moving repo onto new path: %w", err)
+		copyErr := copy.Copy(tmpDir, newRepoPath)
+		if copyErr != nil {
+			return fmt.Errorf("error moving repo onto new path: %w", copyErr)
+		}
 	}
 
 	if err := migrateToInternalIPFSConfig(ipfsRepoPath, newRepoPath); err != nil {
