@@ -87,7 +87,7 @@ func NewFilesystem(ctx context.Context, cfgMap map[string]interface{}) (qfs.File
 
 	node, err := core.NewNode(ctx, &cfg.BuildCfg)
 	if err != nil {
-		return nil, fmt.Errorf("error creating ipfs node: %s", err.Error())
+		return nil, fmt.Errorf("qipfs: error creating ipfs node: %w", err)
 	}
 
 	if cfg.DisableBootstrap {
@@ -96,6 +96,14 @@ func NewFilesystem(ctx context.Context, cfgMap map[string]interface{}) (qfs.File
 			return nil, err
 		}
 		repoCfg.Bootstrap = []string{}
+	}
+
+	if len(cfg.AdditionalSwarmListeningAddrs) != 0 {
+		repoCfg, err := node.Repo.Config()
+		if err != nil {
+			return nil, err
+		}
+		repoCfg.Addresses.Swarm = append(repoCfg.Addresses.Swarm, cfg.AdditionalSwarmListeningAddrs...)
 	}
 
 	capi, err := coreapi.NewCoreAPI(node)
