@@ -26,6 +26,9 @@ type StoreCfg struct {
 	EnablePubSub bool
 	// DisableBootstrap will remove the bootstrap addrs from the node
 	DisableBootstrap bool
+	// AdditionalSwarmListeningAddrs allows you to add a list of
+	// addresses you want the underlying libp2p swarm to listen on
+	AdditionalSwarmListeningAddrs []string
 }
 
 func mapToConfig(cfgmap map[string]interface{}) (*StoreCfg, error) {
