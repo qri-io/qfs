@@ -6,10 +6,12 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-multihash"
+	"github.com/qri-io/qfs/fs"
 )
 
 // NewMemFilesystem allocates an instace of a mapstore that
@@ -54,9 +56,14 @@ var _ Filesystem = (*MemStore)(nil)
 // MemFilestoreType uniquely identifies the mem filestore
 const MemFilestoreType = "mem"
 
-// Type distinguishes this filesystem from others by a unique string prefix
-func (m MemStore) Type() string {
+// FSName distinguishes this filesystem from others by a unique string
+func (m MemStore) FSName() string {
 	return MemFilestoreType
+}
+
+// Open implements the fs.FS interface
+func (m MemStore) Open(name string) (fs.File, error) {
+	return m.OpenFile(context.Background(), name)
 }
 
 // Print converts the store to a string
@@ -67,73 +74,119 @@ func (m MemStore) Print() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(buf, "%s:%s\n\t%s\n", key, file.File().FileName(), string(data))
+		if fi, err := file.File().Stat(); err == nil {
+			fmt.Fprintf(buf, "%s:%s\n\t%s\n", key, fi.Name(), string(data))
+		}
 	}
 
 	return buf.String(), nil
 }
 
-// Put adds a file to the store
-func (m *MemStore) Put(ctx context.Context, file File) (key string, err error) {
-	if file.IsDirectory() {
-		buf := bytes.NewBuffer(nil)
+// WriteFile adds a file to the store
+func (m *MemStore) WriteFile(ctx context.Context, file File) (string, error) {
+	var name string
+	fi, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+
+	switch fi.Mode() {
+	case os.ModeDir:
+		buf := &bytes.Buffer{}
 		dir := fsDir{
 			store: m,
-			path:  file.FullPath(),
+			fi:    fi,
 			files: []string{},
 		}
 
-		for {
-			f, e := file.NextFile()
-			if e != nil {
-				if e.Error() == "EOF" {
-					dirhash, e := hashBytes(buf.Bytes())
-					if err != nil {
-						err = fmt.Errorf("error hashing file data: %s", e.Error())
-						return
-					}
+		readDirFile, ok := file.(fs.ReadDirFile)
+		if !ok {
+			return "", fmt.Errorf("writing a directory requires the  ReadDirFile interface")
+		}
 
-					key = "/map/" + dirhash
-					m.Files[key] = dir
-					return
-				}
-				err = fmt.Errorf("error getting next file: %s", err.Error())
-				return
-			}
+		fileInfos, err := readDirFile.ReadDir(-1)
+		if err != nil {
+			return "", err
+		}
 
-			hash, e := m.Put(ctx, f)
-			if e != nil {
-				err = fmt.Errorf("error putting file: %s", e.Error())
-				return
-			}
-			key = hash
-			dir.files = append(dir.files, hash)
-			_, err = buf.WriteString(key + "\n")
+		for _, fi := range fileInfos {
+			f, err := m.OpenFile(ctx, fi.Name())
 			if err != nil {
+				return "", err
+			}
+
+			hash, err := m.WriteFile(ctx, f)
+			if err != nil {
+				return "", fmt.Errorf("putting file: %s", err.Error())
+			}
+			name = hash
+			dir.files = append(dir.files, hash)
+			if _, err = buf.WriteString(name + "\n"); err != nil {
 				err = fmt.Errorf("error writing to buffer: %s", err.Error())
-				return
+				return "", err
 			}
 		}
 
-	} else {
-		data, e := ioutil.ReadAll(file)
-		if e != nil {
-			err = fmt.Errorf("error reading from file: %s", e.Error())
-			return
-		}
-		hash, e := hashBytes(data)
-		if e != nil {
+		dirhash, e := hashBytes(buf.Bytes())
+		if err != nil {
 			err = fmt.Errorf("error hashing file data: %s", e.Error())
-			return
+			return "", err
 		}
-		key = "/map/" + hash
-		m.Files[key] = fsFile{name: file.FileName(), path: file.FullPath(), data: data}
-		return
+
+		name = NamePrefix(m) + dirhash
+		m.Files[name] = dir
+	case ModeLinkedData:
+		data, err := ioutil.ReadAll(file)
+		if err != nil {
+			return "", fmt.Errorf("reading from file: %w", err)
+		}
+		hash, err := hashBytes(data)
+		if err != nil {
+			return "", fmt.Errorf("hashing file data: %w", err)
+		}
+		linkedData, err := file.LinkedData()
+		if err != nil {
+			return "", fmt.Errorf("getting linked data: %w", err)
+		}
+		links, err := GatherDereferencedLinksAsFileValues(linkedData)
+		if err != nil {
+			return "", err
+		}
+		for i, link := range links {
+			name, err := m.WriteFile(ctx, link.Value.(File))
+			if err != nil {
+				return "", err
+			}
+			links[i].Ref = name
+			links[i].Value = nil
+		}
+		name = NamePrefix(m) + hash
+		m.Files[name] = fsFile{
+			fi:    fi,
+			data:  linkedData,
+			bytes: data,
+		}
+	default:
+		data, err := ioutil.ReadAll(file)
+		if err != nil {
+			return "", fmt.Errorf("reading from file: %w", err)
+		}
+		hash, err := hashBytes(data)
+		if err != nil {
+			return "", fmt.Errorf("hashing file data: %w", err)
+		}
+		name = NamePrefix(m) + hash
+		m.Files[name] = fsFile{
+			fi:    fi,
+			bytes: data,
+		}
 	}
+
+	return name, nil
 }
 
-// Get returns a File from the store
-func (m *MemStore) Get(ctx context.Context, key string) (File, error) {
+// OpenFile returns a File from the store
+func (m *MemStore) OpenFile(ctx context.Context, key string) (File, error) {
 	// key may be of the form /map/QmFoo/file.json but MemStore indexes its maps
 	// using keys like /map/QmFoo. Trim after the second part of the key.
 	parts := strings.Split(key, "/")
@@ -168,8 +221,14 @@ func (m MemStore) Has(ctx context.Context, key string) (exists bool, err error) 
 }
 
 // Delete removes the file from the store with the key
-func (m MemStore) Delete(ctx context.Context, key string) error {
-	delete(m.Files, key)
+func (m MemStore) Delete(ctx context.Context, name string) error {
+	if has, err := m.Has(ctx, name); err != nil {
+		return err
+	} else if !has {
+		return ErrNotFound
+	}
+
+	delete(m.Files, name)
 	return nil
 }
 
@@ -189,34 +248,72 @@ func hashBytes(data []byte) (hash string, err error) {
 }
 
 type fsFile struct {
-	name string
-	path string
-	data []byte
+	fi    os.FileInfo
+	data  interface{}
+	bytes []byte
 }
 
 func (f fsFile) File() File {
-	return NewMemfileBytes(f.path, f.data)
+	if f.fi.Mode() == ModeLinkedData {
+		return linkedDataFile{
+			fi:   f.fi,
+			data: f.data,
+			buf:  bytes.NewBuffer(f.bytes),
+		}
+	}
+
+	file, err := NewFileWithInfo(f.fi, bytes.NewBuffer(f.bytes))
+	if err != nil {
+		panic(err)
+	}
+	return file
 }
 
 type fsDir struct {
 	store *MemStore
-	path  string
+	fi    os.FileInfo
 	files []string
 }
 
 func (f fsDir) File() File {
 	files := make([]File, len(f.files))
 	for i, path := range f.files {
-		file, err := f.store.Get(context.TODO(), path)
+		file, err := f.store.OpenFile(context.TODO(), path)
 		if err != nil {
 			panic(path)
 		}
 		files[i] = file
 	}
 
-	return NewMemdir(f.path, files...)
+	return NewMemdir(f.fi.Name(), files...)
 }
 
 type filer interface {
 	File() File
+}
+
+func collectDescendants(fileInfos []os.FileInfo, hashBuffer *bytes.Buffer, descendants *[]fsFile) (error) {
+	for _, fi := range fileInfos {
+		switch fi.Mode() {
+		case os.ModeDir:
+			collectDescendants(fileInfos []os.FileInfo, hashBuffer *bytes.Buffer, descendants *[]fsFile)
+		case ModeLinkedData:
+		default:
+		}
+		f, err := m.OpenFile(ctx, fi.Name())
+		if err != nil {
+			return err
+		}
+
+		hash, err := m.WriteFile(ctx, f)
+		if err != nil {
+			return fmt.Errorf("putting file: %s", err.Error())
+		}
+		name = hash
+		dir.files = append(dir.files, hash)
+		if _, err = buf.WriteString(name + "\n"); err != nil {
+			err = fmt.Errorf("error writing to buffer: %s", err.Error())
+			return  err
+		}
+	}
 }

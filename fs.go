@@ -3,13 +3,14 @@ package qfs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 )
 
 var (
-	// ErrNotFound is the canonical error for not finding a value
-	ErrNotFound = errors.New("path not found")
+	// ErrNotFound is the canonical error for not finding a file
+	ErrNotFound = errors.New("file not found")
 	// ErrReadOnly is a sentinel value for Filesystems that aren't writable
 	ErrReadOnly = errors.New("readonly filesystem")
 )
@@ -21,23 +22,36 @@ type PathResolver interface {
 
 // Filesystem abstracts & unifies filesystem-like behaviour
 type Filesystem interface {
-	// Type returns a string identifier that distinguishes a filesystem from
+	// FSName returns a string identifier that distinguishes a filesystem from
 	// all other implementations, example identifiers include: "local", "ipfs",
 	// and "http"
-	// types are used as path prefixes when multiplexing filesystems
-	Type() string
+	// names are used as path prefixes on files written to the FS
+	FSName() string
+
+	Has(ctx context.Context, name string) (bool, error)
+
 	// Get fetching files and directories from path strings.
 	// in practice path strings can be things like:
 	// * a local filesystem
 	// * URLS (a "URL path resolver") or
 	// * content-addressed file systems like IPFS or Git
 	// Datasets & dataset components use a filesource to resolve string references
-	Get(ctx context.Context, path string) (File, error)
+	OpenFile(ctx context.Context, name string) (File, error)
+
+	// OpenEncryptedFile(ctx context.Context, name string, privKey crypto.PrivKey, nonce [32]byte) (File, error)
+
 	// Put places a file or directory on the filesystem, returning the root path.
 	// The returned path may or may not honor the path of the given file
-	Put(ctx context.Context, file File) (path string, err error)
+	WriteFile(ctx context.Context, file File) (name string, err error)
+	// WriteEncryptedFile(ctx context.Context, file File, privKey crypto.PrivKey, nonce [32]byte) (name string, err error)
 	// Delete removes a file or directory from the filesystem
 	Delete(ctx context.Context, path string) (err error)
+}
+
+// NamePrefix returns a string prefix for a given filesystem. Prefixes are the
+// filesystem name padded by forward slashes
+func NamePrefix(fs Filesystem) string {
+	return fmt.Sprintf("/%s/", fs.FSName())
 }
 
 // Config binds a filesystem type to a configuration map
@@ -51,9 +65,9 @@ type Config struct {
 // store. Any resources allocated by the store should be scoped to this context
 type Constructor func(ctx context.Context, cfg map[string]interface{}) (Filesystem, error)
 
-// ReleasingFilesystem provides a channel to signal cleanup is finished. It
+// ReleasingFS provides a channel to signal cleanup is finished. It
 // sends after a filesystem has closed & about to release all it's resources
-type ReleasingFilesystem interface {
+type ReleasingFS interface {
 	Filesystem
 	Done() <-chan struct{}
 	DoneErr() error
