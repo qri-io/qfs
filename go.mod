@@ -22,6 +22,7 @@ require (
 	github.com/ipfs/go-mfs v0.1.2
 	github.com/ipfs/go-unixfs v0.2.4
 	github.com/ipfs/interface-go-ipfs-core v0.3.0
+	github.com/libp2p/go-libp2p-quic-transport v0.8.0 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
 	github.com/mitchellh/mapstructure v1.1.2
 	github.com/mr-tron/base58 v1.1.3
@@ -31,5 +32,4 @@ require (
 	github.com/qri-io/go-ipfs-http-client v0.0.6-0.20200623125303-7a2eee881baa
 	golang.org/x/sys v0.0.0-20200523222454-059865788121
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
-	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
