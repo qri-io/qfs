@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	logging "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
@@ -93,8 +94,13 @@ func (fst *Filestore) Fetch(ctx context.Context, source cafs.Source, key string)
 	return fst.getKey(ctx, key)
 }
 
-func (fst *Filestore) Put(ctx context.Context, file qfs.File) (key string, err error) {
-	return "", fmt.Errorf("ipfs_http cannot put")
+func (fst *Filestore) Put(ctx context.Context, file qfs.File) (string, error) {
+	resolvedPath, err := fst.capi.Unixfs().Add(ctx, wrapFile{file})
+	if err != nil {
+		return "", fmt.Errorf("putting file in IPFS via HTTP: %q", err)
+	}
+
+	return pathFromHash(resolvedPath.String()), nil
 }
 
 func (fst *Filestore) Delete(ctx context.Context, key string) error {
@@ -129,6 +135,9 @@ func (fst *Filestore) NewAdder(pin, wrap bool) (cafs.Adder, error) {
 }
 
 func pathFromHash(hash string) string {
+	if strings.HasPrefix(hash, fmt.Sprintf("/%s", FilestoreType)) {
+		return hash
+	}
 	return fmt.Sprintf("/%s/%s", FilestoreType, hash)
 }
 
