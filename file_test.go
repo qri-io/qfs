@@ -2,6 +2,8 @@ package qfs
 
 import (
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestMemfile(t *testing.T) {
@@ -21,20 +23,20 @@ func TestMemfile(t *testing.T) {
 	a.AddChildren(NewMemfileBytes("g.txt", []byte("kazam")))
 
 	expectPaths := []string{
-		"/a",
 		"/a/a.txt",
 		"/a/b.txt",
-		"/a/c",
 		"/a/c/d.txt",
-		"/a/c/e",
 		"/a/c/e/f.txt",
+		"/a/c/e",
+		"/a/c",
 		"/a/h.txt",
 		"/a/j.txt",
 		"/a/g.txt",
+		"/a",
 	}
 
 	paths := []string{}
-	err := Walk(a, 0, func(f File, depth int) error {
+	err := Walk(a, func(f File) error {
 		paths = append(paths, f.FullPath())
 		return nil
 	})
@@ -47,10 +49,8 @@ func TestMemfile(t *testing.T) {
 		return
 	}
 
-	for i, p := range expectPaths {
-		if paths[i] != p {
-			t.Errorf("path %d mismatch expected: %s, got: %s", i, p, paths[i])
-		}
+	if diff := cmp.Diff(expectPaths, paths); diff != "" {
+		t.Errorf("visited paths mismatch. (-want +got):\n%s", diff)
 	}
 }
 
@@ -60,16 +60,16 @@ func TestMemdirMakeDirP(t *testing.T) {
 	dir.MakeDirP(NewMemfileBytes("./a/b/file.txt", []byte("foo")))
 
 	expectPaths := []string{
-		"/",
-		"/a",
-		"/a/b",
-		"/a/b/c",
-		"/a/b/c/d",
 		// "/a/b/c/d/file.txt",
+		"/a/b/c/d",
+		"/a/b/c",
+		"/a/b",
+		"/a",
+		"/",
 	}
 
 	paths := []string{}
-	err := Walk(dir, 0, func(f File, depth int) error {
+	err := Walk(dir, func(f File) error {
 		paths = append(paths, f.FullPath())
 		return nil
 	})

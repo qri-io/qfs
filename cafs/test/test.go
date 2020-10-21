@@ -100,7 +100,7 @@ func EnsureDirectoryBehavior(f cafs.Filestore) error {
 	}
 
 	paths := []string{}
-	qfs.Walk(outf, 0, func(f qfs.File, depth int) error {
+	qfs.Walk(outf, func(f qfs.File) error {
 		paths = append(paths, f.FullPath())
 		return nil
 	})

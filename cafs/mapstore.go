@@ -96,14 +96,25 @@ func (m *MapStore) AddConnection(other *MapStore) {
 func (m MapStore) Print() (string, error) {
 	buf := &bytes.Buffer{}
 	for key, file := range m.Files {
-		data, err := ioutil.ReadAll(file.File())
-		if err != nil {
-			return "", err
+		f := file.File()
+		if !f.IsDirectory() {
+			data, err := ioutil.ReadAll(f)
+			if err != nil {
+				return "", err
+			}
+			fmt.Fprintf(buf, "%s:%s\n\t%s\n", key, f.FullPath(), string(data))
 		}
-		fmt.Fprintf(buf, "%s:%s\n\t%s\n", key, file.File().FileName(), string(data))
 	}
 
 	return buf.String(), nil
+}
+
+// ObjectCount returns the number of content-addressed objects in the store
+func (m MapStore) ObjectCount() (objects int) {
+	for range m.Files {
+		objects++
+	}
+	return objects
 }
 
 // PutFileAtKey puts the file at the given key
@@ -280,7 +291,7 @@ func (a *adder) AddFile(ctx context.Context, f qfs.File) error {
 	}
 	a.out <- AddedFile{
 		Path:  path,
-		Name:  f.FileName(),
+		Name:  f.FullPath(),
 		Bytes: 0,
 		Hash:  path,
 	}
