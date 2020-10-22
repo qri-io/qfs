@@ -12,17 +12,11 @@ import (
 )
 
 func TestWriteHooks(t *testing.T) {
-	root := qfs.NewMemdir("/a",
-		qfs.NewMemfileBytes("b.txt", []byte("foo")),
-		qfs.NewMemfileBytes("c.txt", []byte("bar")),
-		qfs.NewMemfileBytes("d.txt", []byte("baz")),
-	)
-
 	ctx := context.Background()
 	fs := NewMapstore()
 	bHash := ""
 
-	rewriteB := NewMerkelizeHook("/a/b.txt", func(ctx context.Context, f qfs.File, pathMap map[string]string) (io.Reader, error) {
+	rewriteB := func(ctx context.Context, f qfs.File, pathMap map[string]string) (io.Reader, error) {
 		hContents, err := fs.Get(ctx, pathMap["/a/d.txt"])
 		if err != nil {
 			return nil, err
@@ -32,14 +26,20 @@ func TestWriteHooks(t *testing.T) {
 			return nil, err
 		}
 		return strings.NewReader("APPLES" + string(hData)), nil
-	}, "/a/d.txt")
+	}
 
-	getBHash := NewMerkelizeHook("/a/c.txt", func(ctx context.Context, f qfs.File, pathMap map[string]string) (io.Reader, error) {
+	getBHash := func(ctx context.Context, f qfs.File, pathMap map[string]string) (io.Reader, error) {
 		bHash = pathMap["/a/b.txt"]
 		return f, nil
-	}, "/a/b.txt")
+	}
 
-	_, err := WriteWithHooks(ctx, fs, root, rewriteB, getBHash)
+	root := qfs.NewMemdir("/a",
+		NewHookFile(qfs.NewMemfileBytes("/a/b.txt", []byte("foo")), rewriteB, "/a/d.txt"),
+		NewHookFile(qfs.NewMemfileBytes("/a/c.txt", []byte("bar")), getBHash, "/a/b.txt"),
+		qfs.NewMemfileBytes("d.txt", []byte("baz")),
+	)
+
+	_, err := WriteWithHooks(ctx, fs, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,21 +60,21 @@ func TestWriteHooks(t *testing.T) {
 }
 
 func TestWriteHooksRollback(t *testing.T) {
-	root := qfs.NewMemdir("/a",
-		qfs.NewMemfileBytes("b.txt", []byte("foo")),
-		qfs.NewMemfileBytes("c.txt", []byte("bar")),
-		qfs.NewMemfileBytes("d.txt", []byte("baz")),
-	)
-
 	ctx := context.Background()
 	fs := NewMapstore()
 	errMsg := "oh noes it broke"
 
-	rewriteB := NewMerkelizeHook("/a/b.txt", func(ctx context.Context, f qfs.File, pathMap map[string]string) (io.Reader, error) {
+	failHook := func(ctx context.Context, f qfs.File, pathMap map[string]string) (io.Reader, error) {
 		return nil, fmt.Errorf(errMsg)
-	}, "/a/d.txt")
+	}
 
-	_, err := WriteWithHooks(ctx, fs, root, rewriteB)
+	root := qfs.NewMemdir("/a",
+		NewHookFile(qfs.NewMemfileBytes("b.txt", []byte("foo")), failHook, "/a/d.txt"),
+		qfs.NewMemfileBytes("c.txt", []byte("bar")),
+		qfs.NewMemfileBytes("d.txt", []byte("baz")),
+	)
+
+	_, err := WriteWithHooks(ctx, fs, root)
 	if err == nil {
 		t.Errorf("expected error, got nil")
 	} else if err.Error() != errMsg {
