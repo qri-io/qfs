@@ -1,4 +1,4 @@
-package cafs
+package qfs
 
 import (
 	"context"
@@ -7,16 +7,14 @@ import (
 	"io/ioutil"
 	"strings"
 	"testing"
-
-	"github.com/qri-io/qfs"
 )
 
 func TestWriteHooks(t *testing.T) {
 	ctx := context.Background()
-	fs := NewMapstore()
+	fs := NewMemFS()
 	bHash := ""
 
-	rewriteB := func(ctx context.Context, f qfs.File, pathMap map[string]string) (io.Reader, error) {
+	rewriteB := func(ctx context.Context, f File, pathMap map[string]string) (io.Reader, error) {
 		hContents, err := fs.Get(ctx, pathMap["/a/d.txt"])
 		if err != nil {
 			return nil, err
@@ -28,15 +26,15 @@ func TestWriteHooks(t *testing.T) {
 		return strings.NewReader("APPLES" + string(hData)), nil
 	}
 
-	getBHash := func(ctx context.Context, f qfs.File, pathMap map[string]string) (io.Reader, error) {
+	getBHash := func(ctx context.Context, f File, pathMap map[string]string) (io.Reader, error) {
 		bHash = pathMap["/a/b.txt"]
 		return f, nil
 	}
 
-	root := qfs.NewMemdir("/a",
-		NewHookFile(qfs.NewMemfileBytes("/a/b.txt", []byte("foo")), rewriteB, "/a/d.txt"),
-		NewHookFile(qfs.NewMemfileBytes("/a/c.txt", []byte("bar")), getBHash, "/a/b.txt"),
-		qfs.NewMemfileBytes("d.txt", []byte("baz")),
+	root := NewMemdir("/a",
+		NewWriteHookFile(NewMemfileBytes("/a/b.txt", []byte("foo")), rewriteB, "/a/d.txt"),
+		NewWriteHookFile(NewMemfileBytes("/a/c.txt", []byte("bar")), getBHash, "/a/b.txt"),
+		NewMemfileBytes("d.txt", []byte("baz")),
 	)
 
 	_, err := WriteWithHooks(ctx, fs, root)
@@ -61,17 +59,17 @@ func TestWriteHooks(t *testing.T) {
 
 func TestWriteHooksRollback(t *testing.T) {
 	ctx := context.Background()
-	fs := NewMapstore()
+	fs := NewMemFS()
 	errMsg := "oh noes it broke"
 
-	failHook := func(ctx context.Context, f qfs.File, pathMap map[string]string) (io.Reader, error) {
+	failHook := func(ctx context.Context, f File, pathMap map[string]string) (io.Reader, error) {
 		return nil, fmt.Errorf(errMsg)
 	}
 
-	root := qfs.NewMemdir("/a",
-		NewHookFile(qfs.NewMemfileBytes("b.txt", []byte("foo")), failHook, "/a/d.txt"),
-		qfs.NewMemfileBytes("c.txt", []byte("bar")),
-		qfs.NewMemfileBytes("d.txt", []byte("baz")),
+	root := NewMemdir("/a",
+		NewWriteHookFile(NewMemfileBytes("b.txt", []byte("foo")), failHook, "/a/d.txt"),
+		NewMemfileBytes("c.txt", []byte("bar")),
+		NewMemfileBytes("d.txt", []byte("baz")),
 	)
 
 	_, err := WriteWithHooks(ctx, fs, root)

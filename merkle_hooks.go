@@ -1,4 +1,4 @@
-package cafs
+package qfs
 
 import (
 	"context"
@@ -7,46 +7,45 @@ import (
 	"sync"
 
 	logger "github.com/ipfs/go-log"
-	"github.com/qri-io/qfs"
 )
 
-var log = logger.Logger("cafs")
+var log = logger.Logger("qfs")
 
 // func init() {
 // 	logger.SetLogLevel("cafs", "debug")
 // }
 
-// MerkelizeHook is a function that's called when a given path has been
+// WriteHook is a function that's called when a given path has been
 // written to the content addressed filesystem
-type MerkelizeHook func(ctx context.Context, f qfs.File, added map[string]string) (io.Reader, error)
+type WriteHook func(ctx context.Context, f File, added map[string]string) (io.Reader, error)
 
 // hookFile configures a callback function to be executed on a saved
 // file, at a specific point in the merkelization process
 type hookFile struct {
 	// file for delayed hook calls
-	qfs.File
+	File
 	// once mutex for callback execution
 	once sync.Once
 	// slice of pre-merkelized paths that need to be saved before the hook
 	// can be called
 	requiredPaths []string
 	// function to call
-	callback MerkelizeHook
+	callback WriteHook
 }
 
 // Assert hookFile implements HookFile at compile time
-var _ HookFile = (*hookFile)(nil)
+var _ WriteHookFile = (*hookFile)(nil)
 
-// HookFile is a file that can hook into the merkelization process, affecting
+// WriteHookFile is a file that can hook into the merkelization process, affecting
 // contents as contents are being rendered immutable
-type HookFile interface {
-	qfs.File
+type WriteHookFile interface {
+	File
 	HasRequiredPaths(paths map[string]string) bool
 	CallAndAdd(ctx context.Context, adder Adder, added map[string]string) error
 }
 
-// NewHookFile wraps a File with a hook & set of sibling / child dependencies
-func NewHookFile(file qfs.File, cb MerkelizeHook, requiredPaths ...string) qfs.File {
+// NewWriteHookFile wraps a File with a hook & set of sibling / child dependencies
+func NewWriteHookFile(file File, cb WriteHook, requiredPaths ...string) File {
 	return &hookFile{
 		File:          file,
 		requiredPaths: requiredPaths,
@@ -72,7 +71,7 @@ func (h *hookFile) CallAndAdd(ctx context.Context, adder Adder, merkelizedPaths 
 		if err != nil {
 			return
 		}
-		if err = adder.AddFile(ctx, qfs.NewMemfileReader(h.FullPath(), r)); err != nil {
+		if err = adder.AddFile(ctx, NewMemfileReader(h.FullPath(), r)); err != nil {
 			return
 		}
 	})
@@ -83,17 +82,22 @@ func (h *hookFile) CallAndAdd(ctx context.Context, adder Adder, merkelizedPaths 
 // WriteWithHooks writes a file or directory to a given filestore using
 // merkelization hooks
 // failed writes are rolled back with delete requests for all added files
-func WriteWithHooks(ctx context.Context, fs Filestore, root qfs.File) (string, error) {
+func WriteWithHooks(ctx context.Context, fs Filesystem, root File) (string, error) {
 	var (
 		finalPath       string
-		waitingHooks    []HookFile
+		waitingHooks    []WriteHookFile
 		doneCh          = make(chan error, 0)
 		addedCh         = make(chan AddedFile, 1)
 		merkelizedPaths = map[string]string{}
 		tasks           = 0
 	)
 
-	adder, err := fs.NewAdder(true, true)
+	addFS, ok := fs.(AddingFS)
+	if !ok {
+		return "", ErrNotAddingFS
+	}
+
+	adder, err := addFS.NewAdder(ctx, true, true)
 	if err != nil {
 		return "", err
 	}
@@ -130,33 +134,33 @@ func WriteWithHooks(ctx context.Context, fs Filestore, root qfs.File) (string, e
 	}()
 
 	go func() {
-		err := qfs.Walk(root, func(file qfs.File) error {
+		err := Walk(root, func(file File) error {
 			tasks++
 			log.Debugf("visiting %s waitingHooks=%d added=%v", file.FullPath(), len(waitingHooks), merkelizedPaths)
 
-			for _, hf := range waitingHooks {
-				if hf.HasRequiredPaths(merkelizedPaths) {
-					log.Debugf("calling delayed hook: %s", hf.FileName())
-					if err := hf.CallAndAdd(ctx, adder, merkelizedPaths); err != nil {
+			for i, whf := range waitingHooks {
+				if whf.HasRequiredPaths(merkelizedPaths) {
+					log.Debugf("calling delayed hook: %s", whf.FileName())
+					if err := whf.CallAndAdd(ctx, adder, merkelizedPaths); err != nil {
 						return err
 					}
-					// waitingHooks = append(waitingHooks[i:], waitingHooks[:i+1]...)
+					waitingHooks = append(waitingHooks[i:], waitingHooks[:i+1]...)
 					// wait for one path to be added
 					<-addedCh
 				}
 			}
 
-			if hf, isAHook := file.(HookFile); isAHook {
-				if hf.HasRequiredPaths(merkelizedPaths) {
+			if whf, isAHook := file.(WriteHookFile); isAHook {
+				if whf.HasRequiredPaths(merkelizedPaths) {
 					log.Debugf("calling hook for path %s", file.FullPath())
-					if err := hf.CallAndAdd(ctx, adder, merkelizedPaths); err != nil {
+					if err := whf.CallAndAdd(ctx, adder, merkelizedPaths); err != nil {
 						return err
 					}
 					// wait for one path to be added
 					<-addedCh
 				} else {
 					log.Debugf("adding hook to waitlist for path %s", file.FullPath())
-					waitingHooks = append(waitingHooks, hf)
+					waitingHooks = append(waitingHooks, whf)
 				}
 				return nil
 			}

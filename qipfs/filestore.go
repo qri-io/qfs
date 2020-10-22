@@ -293,7 +293,7 @@ func (fst *Filestore) getKey(ctx context.Context, key string) (qfs.File, error) 
 type Adder struct {
 	adder *coreunix.Adder
 	out   chan interface{}
-	added chan cafs.AddedFile
+	added chan qfs.AddedFile
 	wrap  bool
 	pin   bool
 }
@@ -302,7 +302,7 @@ func (a *Adder) AddFile(ctx context.Context, f qfs.File) error {
 	return a.adder.AddFile(wrapFile{f})
 }
 
-func (a *Adder) Added() chan cafs.AddedFile {
+func (a *Adder) Added() chan qfs.AddedFile {
 	return a.added
 }
 
@@ -336,9 +336,8 @@ func (a *Adder) Close() error {
 	return nil
 }
 
-func (fst *Filestore) NewAdder(pin, wrap bool) (cafs.Adder, error) {
+func (fst *Filestore) NewAdder(ctx context.Context, pin, wrap bool) (qfs.Adder, error) {
 	node := fst.node
-	ctx := context.Background()
 
 	a, err := coreunix.NewAdder(ctx, node.Pinning, node.Blockstore, node.DAG)
 	if err != nil {
@@ -358,7 +357,7 @@ func (fst *Filestore) NewAdder(pin, wrap bool) (cafs.Adder, error) {
 				if ok {
 					output := out.(*coreunix.AddEvent)
 					if output.Hash != "" {
-						added <- cafs.AddedFile{
+						added <- qfs.AddedFile{
 							Path:  pathFromHash(output.Hash),
 							Name:  output.Name,
 							Bytes: output.Bytes,
