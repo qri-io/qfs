@@ -345,7 +345,7 @@ func (fst *Filestore) NewAdder(ctx context.Context, pin, wrap bool) (qfs.Adder, 
 	}
 
 	outChan := make(chan interface{}, 9)
-	added := make(chan cafs.AddedFile, 9)
+	added := make(chan qfs.AddedFile, 9)
 	a.Out = outChan
 	a.Pin = pin
 	a.Wrap = wrap

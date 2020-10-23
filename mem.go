@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io/ioutil"
+	"sort"
 	"strings"
 
 	"github.com/mr-tron/base58"
@@ -20,13 +21,13 @@ func NewMemFilesystem(_ context.Context, cfg map[string]interface{}) (Filesystem
 }
 
 // NewMemFS allocates an instance of a mapstore
-func NewMemFS() *MemStore {
-	return &MemStore{
+func NewMemFS() *MemFS {
+	return &MemFS{
 		Files: make(map[string]filer),
 	}
 }
 
-// MemStore implements Filestore in-memory as a map
+// MemFS implements Filestore in-memory as a map
 //
 // An example pulled from tests will create a tree of "cafs"
 // with directories & cafs, with paths properly set:
@@ -42,25 +43,25 @@ func NewMemFS() *MemStore {
 // )
 // File is an interface that provides functionality for handling
 // cafs/directories as values that can be supplied to commands.
-type MemStore struct {
+type MemFS struct {
 	Pinned  bool
-	Network []*MemStore
+	Network []*MemFS
 	Files   map[string]filer
 }
 
-// compile-time assertion that MemStore satisfies the Filesystem interface
-var _ Filesystem = (*MemStore)(nil)
+// compile-time assertion that MemFS satisfies the Filesystem interface
+var _ Filesystem = (*MemFS)(nil)
 
 // MemFilestoreType uniquely identifies the mem filestore
 const MemFilestoreType = "mem"
 
 // Type distinguishes this filesystem from others by a unique string prefix
-func (m MemStore) Type() string {
+func (m MemFS) Type() string {
 	return MemFilestoreType
 }
 
 // Print converts the store to a string
-func (m MemStore) Print() (string, error) {
+func (m MemFS) Print() (string, error) {
 	buf := &bytes.Buffer{}
 	for key, file := range m.Files {
 		f := file.File()
@@ -70,6 +71,8 @@ func (m MemStore) Print() (string, error) {
 				return "", err
 			}
 			fmt.Fprintf(buf, "%s:%s\n\t%s\n", key, f.FullPath(), string(data))
+		} else {
+			fmt.Fprintf(buf, "%s:%s\n\tDIR:%#v\n", key, f.FullPath(), file.(fsDir).files)
 		}
 	}
 
@@ -77,7 +80,7 @@ func (m MemStore) Print() (string, error) {
 }
 
 // ObjectCount returns the number of content-addressed objects in the store
-func (m MemStore) ObjectCount() (objects int) {
+func (m MemFS) ObjectCount() (objects int) {
 	for range m.Files {
 		objects++
 	}
@@ -85,13 +88,18 @@ func (m MemStore) ObjectCount() (objects int) {
 }
 
 // Put adds a file to the store
-func (m *MemStore) Put(ctx context.Context, file File) (key string, err error) {
+func (m *MemFS) Put(ctx context.Context, file File) (key string, err error) {
+	key, err = m.put(ctx, file)
+	return fmt.Sprintf("/mem/%s", key), err
+}
+
+func (m *MemFS) put(ctx context.Context, file File) (key string, err error) {
 	if file.IsDirectory() {
 		buf := bytes.NewBuffer(nil)
 		dir := fsDir{
-			store: m,
+			fs:    m,
 			path:  file.FullPath(),
-			files: []string{},
+			files: map[string]string{},
 		}
 
 		for {
@@ -104,28 +112,27 @@ func (m *MemStore) Put(ctx context.Context, file File) (key string, err error) {
 						return
 					}
 
-					key = "/map/" + dirhash
-					m.Files[key] = dir
+					key = dirhash
+					m.Files[dirhash] = dir
 					return
 				}
 				err = fmt.Errorf("error getting next file: %s", err.Error())
 				return
 			}
 
-			hash, e := m.Put(ctx, f)
+			hash, e := m.put(ctx, f)
 			if e != nil {
 				err = fmt.Errorf("error putting file: %s", e.Error())
 				return
 			}
 			key = hash
-			dir.files = append(dir.files, hash)
+			dir.files[f.FileName()] = hash
 			_, err = buf.WriteString(key + "\n")
 			if err != nil {
 				err = fmt.Errorf("error writing to buffer: %s", err.Error())
 				return
 			}
 		}
-
 	} else {
 		data, e := ioutil.ReadAll(file)
 		if e != nil {
@@ -137,41 +144,54 @@ func (m *MemStore) Put(ctx context.Context, file File) (key string, err error) {
 			err = fmt.Errorf("error hashing file data: %s", e.Error())
 			return
 		}
-		key = "/map/" + hash
-		m.Files[key] = fsFile{name: file.FileName(), path: file.FullPath(), data: data}
+		m.Files[hash] = fsFile{name: file.FileName(), path: file.FullPath(), data: data}
+		key = hash
 		return
 	}
 }
 
 // Get returns a File from the store
-func (m *MemStore) Get(ctx context.Context, key string) (File, error) {
-	// key may be of the form /map/QmFoo/file.json but MemStore indexes its maps
-	// using keys like /map/QmFoo. Trim after the second part of the key.
-	parts := strings.Split(key, "/")
-	if len(parts) > 2 {
-		prefix := strings.Join([]string{"", parts[1], parts[2]}, "/")
-		key = prefix
-	}
-	// Check if the local MemStore has the file.
-	f, err := m.getLocal(key)
-	if err == nil {
-		return f, nil
-	} else if err != ErrNotFound {
-		return nil, err
-	}
-
-	return nil, ErrNotFound
+func (m *MemFS) Get(ctx context.Context, key string) (File, error) {
+	return m.getLocal(key)
 }
 
-func (m *MemStore) getLocal(key string) (File, error) {
-	if m.Files[key] == nil {
+func (m *MemFS) getLocal(key string) (File, error) {
+	key = strings.TrimPrefix(key, fmt.Sprintf("/%s/", MemFilestoreType))
+	// key may be of the form /mem/QmFoo/file.json but MemFS indexes its maps
+	// using keys like /mem/QmFoo. Trim after the second part of the key.
+	parts := strings.Split(key, "/")
+	log.Debugf("MemFS getting key=%q parts=%q", key, parts)
+
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("key is required")
+	}
+
+	log.Debugf("get hash=%q", parts[0])
+	// Check if the local MemFS has the file
+	f := m.Files[parts[0]]
+	if f == nil {
 		return nil, ErrNotFound
 	}
-	return m.Files[key].File(), nil
+
+	parts = parts[1:]
+	for len(parts) > 0 {
+		dir, ok := f.(fsDir)
+		if !ok {
+			return nil, ErrNotDirectory
+		}
+		log.Debugf("get part=%s files=%v", parts[0], dir.files)
+		f = m.Files[dir.files[parts[0]]]
+		if f == nil {
+			return nil, ErrNotFound
+		}
+		parts = parts[1:]
+	}
+
+	return f.File(), nil
 }
 
 // Has returns whether the store has a File with the key
-func (m MemStore) Has(ctx context.Context, key string) (exists bool, err error) {
+func (m MemFS) Has(ctx context.Context, key string) (exists bool, err error) {
 	if m.Files[key] == nil {
 		return false, nil
 	}
@@ -179,37 +199,83 @@ func (m MemStore) Has(ctx context.Context, key string) (exists bool, err error) 
 }
 
 // Delete removes the file from the store with the key
-func (m MemStore) Delete(ctx context.Context, key string) error {
+func (m MemFS) Delete(ctx context.Context, key string) error {
 	delete(m.Files, key)
 	return nil
 }
 
+type adder struct {
+	fs   MemFS
+	pin  bool
+	out  chan AddedFile
+	tree *nd
+}
+
 // NewAdder returns an Adder for the store
-func (m MemStore) NewAdder(ctx context.Context, pin, wrap bool) (Adder, error) {
+func (m MemFS) NewAdder(ctx context.Context, pin, wrap bool) (Adder, error) {
 	addedOut := make(chan AddedFile, 9)
 	return &adder{
-		fs:  m,
-		out: addedOut,
+		fs:   m,
+		out:  addedOut,
+		tree: newNode(""),
 	}, nil
 }
 
-type adder struct {
-	fs  MemStore
-	pin bool
-	out chan AddedFile
+func (a *adder) addNode(f File) *nd {
+	path := f.FullPath()
+	path = strings.TrimPrefix(path, fmt.Sprintf("/%s/", MemFilestoreType))
+	path = strings.TrimPrefix(path, "/")
+
+	node := a.tree
+	if path == "" {
+		return node
+	}
+
+	for _, part := range strings.Split(path, "/") {
+		var ch *nd
+		for _, c := range node.children {
+			if c.name == part {
+				ch = c
+				break
+			}
+		}
+		if ch == nil {
+			ch = newNode(part)
+			node.children = append(node.children, ch)
+		}
+		node = ch
+	}
+	return node
 }
 
-func (a *adder) AddFile(ctx context.Context, f File) error {
-	path, err := a.fs.Put(ctx, f)
-	if err != nil {
-		err = fmt.Errorf("error putting file in mapstore: %s", err.Error())
-		return err
+func (a *adder) AddFile(ctx context.Context, f File) (err error) {
+	node := a.addNode(f)
+	var hash string
+
+	if f.IsDirectory() {
+		var dir fsDir
+		hash, dir = node.toDir(&a.fs)
+		if err != nil {
+			return err
+		}
+		log.Debugf("adding directory path=%s dir=%v", hash, dir.files)
+		a.fs.Files[hash] = dir
+		node.hash = hash
+	} else {
+		hash, err = a.fs.put(ctx, f)
+		if err != nil {
+			err = fmt.Errorf("error putting file in mapstore: %s", err.Error())
+			return err
+		}
+		node.hash = hash
 	}
+
+	hash = fmt.Sprintf("/%s/%s", MemFilestoreType, hash)
 	a.out <- AddedFile{
-		Path:  path,
+		Path:  hash,
 		Name:  f.FullPath(),
 		Bytes: 0,
-		Hash:  path,
+		Hash:  hash,
 	}
 	return nil
 }
@@ -249,19 +315,20 @@ func (f fsFile) File() File {
 }
 
 type fsDir struct {
-	store *MemStore
+	fs    *MemFS
 	path  string
-	files []string
+	files map[string]string
 }
 
 func (f fsDir) File() File {
-	files := make([]File, len(f.files))
-	for i, path := range f.files {
-		file, err := f.store.Get(context.TODO(), path)
-		if err != nil {
-			panic(path)
+	files := make([]File, 0, len(f.files))
+
+	for _, hash := range f.files {
+		f := f.fs.Files[hash]
+		if f == nil {
+			panic(hash)
 		}
-		files[i] = file
+		files = append(files, f.File())
 	}
 
 	return NewMemdir(f.path, files...)
@@ -269,4 +336,43 @@ func (f fsDir) File() File {
 
 type filer interface {
 	File() File
+}
+
+type nd struct {
+	name     string
+	hash     string
+	children nodes
+}
+
+type nodes []*nd
+
+func (ns nodes) Len() int           { return len(ns) }
+func (ns nodes) Less(i, j int) bool { return ns[i].name < ns[j].name }
+func (ns nodes) Swap(i, j int)      { ns[j], ns[i] = ns[i], ns[j] }
+
+func newNode(name string) *nd {
+	return &nd{name: name}
+}
+
+func (n *nd) toDir(fs *MemFS) (string, fsDir) {
+	buf := bytes.NewBuffer(nil)
+	dir := fsDir{
+		fs:    fs,
+		path:  n.name,
+		files: map[string]string{},
+	}
+
+	sort.Sort(n.children)
+	for _, ch := range n.children {
+		dir.files[ch.name] = ch.hash
+		if _, err := buf.WriteString(ch.hash + "\n"); err != nil {
+			panic(err.Error())
+		}
+	}
+
+	hash, err := hashBytes(buf.Bytes())
+	if err != nil {
+		panic(err)
+	}
+	return hash, dir
 }

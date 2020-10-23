@@ -5,14 +5,21 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+
+	logger "github.com/ipfs/go-log"
 )
 
 var (
+	log = logger.Logger("qfs")
 	// ErrNotFound is the canonical error for not finding a value
 	ErrNotFound = errors.New("path not found")
 	// ErrReadOnly is a sentinel value for Filesystems that aren't writable
 	ErrReadOnly = errors.New("readonly filesystem")
 )
+
+// func init() {
+// 	logger.SetLogLevel("qfs", "debug")
+// }
 
 // PathResolver is the "get" portion of a Filesystem
 type PathResolver interface {

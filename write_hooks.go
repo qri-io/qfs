@@ -5,15 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
-
-	logger "github.com/ipfs/go-log"
 )
-
-var log = logger.Logger("qfs")
-
-// func init() {
-// 	logger.SetLogLevel("cafs", "debug")
-// }
 
 // WriteHook is a function that's called when a given path has been
 // written to the content addressed filesystem
@@ -65,7 +57,7 @@ func (h *hookFile) HasRequiredPaths(merkelizedPaths map[string]string) bool {
 
 func (h *hookFile) CallAndAdd(ctx context.Context, adder Adder, merkelizedPaths map[string]string) (err error) {
 	h.once.Do(func() {
-		log.Debugf("calling hookFile path=%s merkelized=%#v", h.FullPath(), merkelizedPaths)
+		log.Debugf("calling hook path=%s merkelized=%#v", h.FullPath(), merkelizedPaths)
 		var r io.Reader
 		r, err = h.callback(ctx, h.File, merkelizedPaths)
 		if err != nil {
@@ -122,19 +114,17 @@ func WriteWithHooks(ctx context.Context, fs Filesystem, root File) (string, erro
 			log.Debugf("added name=%s hash=%s", ao.Name, ao.Path)
 			merkelizedPaths[ao.Name] = ao.Path
 			finalPath = ao.Path
-
 			addedCh <- ao
-
-			tasks--
-			if tasks == 0 {
-				doneCh <- nil
-				return
-			}
 		}
 	}()
 
 	go func() {
 		err := Walk(root, func(file File) error {
+			// special case to skip empty dirs
+			if file.IsDirectory() && file.FileName() == "" {
+				return nil
+			}
+
 			tasks++
 			log.Debugf("visiting %s waitingHooks=%d added=%v", file.FullPath(), len(waitingHooks), merkelizedPaths)
 
@@ -142,6 +132,7 @@ func WriteWithHooks(ctx context.Context, fs Filesystem, root File) (string, erro
 				if whf.HasRequiredPaths(merkelizedPaths) {
 					log.Debugf("calling delayed hook: %s", whf.FileName())
 					if err := whf.CallAndAdd(ctx, adder, merkelizedPaths); err != nil {
+						log.Debugf("delayed WriteHookFile error=%s", err)
 						return err
 					}
 					waitingHooks = append(waitingHooks[i:], waitingHooks[:i+1]...)
@@ -152,8 +143,8 @@ func WriteWithHooks(ctx context.Context, fs Filesystem, root File) (string, erro
 
 			if whf, isAHook := file.(WriteHookFile); isAHook {
 				if whf.HasRequiredPaths(merkelizedPaths) {
-					log.Debugf("calling hook for path %s", file.FullPath())
 					if err := whf.CallAndAdd(ctx, adder, merkelizedPaths); err != nil {
+						log.Debugf("WriteHookFile error=%s", err)
 						return err
 					}
 					// wait for one path to be added
@@ -166,6 +157,7 @@ func WriteWithHooks(ctx context.Context, fs Filesystem, root File) (string, erro
 			}
 
 			if err := adder.AddFile(ctx, file); err != nil {
+				log.Debugf("adder.AddFile error=%s", err)
 				return err
 			}
 			// wait for one path to be added
@@ -173,6 +165,11 @@ func WriteWithHooks(ctx context.Context, fs Filesystem, root File) (string, erro
 
 			return nil
 		})
+
+		if err != nil {
+			log.Debugf("walk error=%s", err)
+			doneCh <- err
+		}
 
 		for i, hook := range waitingHooks {
 			if !hook.HasRequiredPaths(merkelizedPaths) {
@@ -187,9 +184,7 @@ func WriteWithHooks(ctx context.Context, fs Filesystem, root File) (string, erro
 			waitingHooks = append(waitingHooks[i:], waitingHooks[:i+1]...)
 		}
 
-		if err != nil {
-			doneCh <- err
-		}
+		doneCh <- nil
 	}()
 
 	err = <-doneCh
