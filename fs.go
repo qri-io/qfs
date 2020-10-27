@@ -33,6 +33,11 @@ type Filesystem interface {
 	// and "http"
 	// types are used as path prefixes when multiplexing filesystems
 	Type() string
+	// Has returns whether the `key` is mapped to a `value`.
+	// In some contexts, it may be much cheaper only to check for existence of
+	// a value, rather than retrieving the value itself. (e.g. HTTP HEAD).
+	// The default implementation is found in `GetBackedHas`.
+	Has(ctx context.Context, path string) (exists bool, err error)
 	// Get fetching files and directories from path strings.
 	// in practice path strings can be things like:
 	// * a local filesystem
@@ -70,6 +75,12 @@ type ReleasingFilesystem interface {
 // persisted resources
 type Destroyer interface {
 	Destroy() error
+}
+
+// PinningFS interface for content stores that support the concept of pinnings
+type PinningFS interface {
+	Pin(ctx context.Context, key string, recursive bool) error
+	Unpin(ctx context.Context, key string, recursive bool) error
 }
 
 // AbsPath adjusts the provided string to a path lib functions can work with

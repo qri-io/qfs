@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 	"time"
 
 	// Note coreunix is forked form github.com/ipfs/go-ipfs/core/coreunix
@@ -299,6 +300,7 @@ type Adder struct {
 }
 
 func (a *Adder) AddFile(ctx context.Context, f qfs.File) error {
+	log.Debugf("Adder.AddFile FullPath=%s", f.FullPath())
 	return a.adder.AddFile(wrapFile{f})
 }
 
@@ -306,34 +308,21 @@ func (a *Adder) Added() chan qfs.AddedFile {
 	return a.added
 }
 
-func (a *Adder) Close() error {
+func (a *Adder) Finalize() (string, error) {
 	defer close(a.out)
-	// node, err := a.adder.CurRootNode()
-	// if err != nil {
-	// 	return err
-	// }
-	// if a.wrap {
-	// 	// rootDir := files.NewSliceDirectory([]files.DirEntry{
-	// 	// 	files.FileEntry("", files.ToFile(node)),
-	// 	// })
-	// 	// if err := a.adder.AddDir("", rootDir, true); err != nil {
-	// 	// 	return err
-	// 	// }
-	// 	node, err = a.adder.RootDirectory()
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// }
 
-	if _, err := a.adder.Finalize(); err != nil {
-		return err
+	root, err := a.adder.Finalize()
+	if err != nil {
+		return "", err
 	}
 
 	if a.pin {
-		return a.adder.PinRoot()
+		if err := a.adder.PinRoot(); err != nil {
+			return "", err
+		}
 	}
 
-	return nil
+	return "/ipfs/" + root.Cid().String(), nil
 }
 
 func (fst *Filestore) NewAdder(ctx context.Context, pin, wrap bool) (qfs.Adder, error) {
@@ -344,8 +333,8 @@ func (fst *Filestore) NewAdder(ctx context.Context, pin, wrap bool) (qfs.Adder, 
 		return nil, fmt.Errorf("error allocating adder: %s", err.Error())
 	}
 
-	outChan := make(chan interface{}, 9)
-	added := make(chan qfs.AddedFile, 9)
+	outChan := make(chan interface{}, 100)
+	added := make(chan qfs.AddedFile, 100)
 	a.Out = outChan
 	a.Pin = pin
 	a.Wrap = wrap
@@ -356,7 +345,11 @@ func (fst *Filestore) NewAdder(ctx context.Context, pin, wrap bool) (qfs.Adder, 
 			case out, ok := <-outChan:
 				if ok {
 					output := out.(*coreunix.AddEvent)
+					if !strings.HasPrefix(output.Name, "/") {
+						output.Name = fmt.Sprintf("/%s", output.Name)
+					}
 					if output.Hash != "" {
+						log.Debugf("file added %#v", output)
 						added <- qfs.AddedFile{
 							Path:  pathFromHash(output.Hash),
 							Name:  output.Name,

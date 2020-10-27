@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 )
 
@@ -32,17 +33,26 @@ var _ WriteHookFile = (*hookFile)(nil)
 // contents as contents are being rendered immutable
 type WriteHookFile interface {
 	File
+	RequiredPaths() []string
 	HasRequiredPaths(paths map[string]string) bool
 	CallAndAdd(ctx context.Context, adder Adder, added map[string]string) error
 }
 
 // NewWriteHookFile wraps a File with a hook & set of sibling / child dependencies
 func NewWriteHookFile(file File, cb WriteHook, requiredPaths ...string) File {
+	if file.IsDirectory() {
+		panic("cannot create a WriteHookFile with a Directory")
+	}
+
 	return &hookFile{
 		File:          file,
 		requiredPaths: requiredPaths,
 		callback:      cb,
 	}
+}
+
+func (h *hookFile) RequiredPaths() []string {
+	return h.requiredPaths
 }
 
 func (h *hookFile) HasRequiredPaths(merkelizedPaths map[string]string) bool {
@@ -81,7 +91,6 @@ func WriteWithHooks(ctx context.Context, fs Filesystem, root File) (string, erro
 		doneCh          = make(chan error, 0)
 		addedCh         = make(chan AddedFile, 1)
 		merkelizedPaths = map[string]string{}
-		tasks           = 0
 	)
 
 	addFS, ok := fs.(AddingFS)
@@ -113,19 +122,17 @@ func WriteWithHooks(ctx context.Context, fs Filesystem, root File) (string, erro
 		for ao := range adder.Added() {
 			log.Debugf("added name=%s hash=%s", ao.Name, ao.Path)
 			merkelizedPaths[ao.Name] = ao.Path
-			finalPath = ao.Path
+			// finalPath = ao.Path
 			addedCh <- ao
 		}
 	}()
 
 	go func() {
 		err := Walk(root, func(file File) error {
-			// special case to skip empty dirs
-			if file.IsDirectory() && file.FileName() == "" {
+			if file.IsDirectory() {
 				return nil
 			}
 
-			tasks++
 			log.Debugf("visiting %s waitingHooks=%d added=%v", file.FullPath(), len(waitingHooks), merkelizedPaths)
 
 			for i, whf := range waitingHooks {
@@ -173,7 +180,14 @@ func WriteWithHooks(ctx context.Context, fs Filesystem, root File) (string, erro
 
 		for i, hook := range waitingHooks {
 			if !hook.HasRequiredPaths(merkelizedPaths) {
-				doneCh <- fmt.Errorf("requirements for hook %q were never met", hook.FullPath())
+				missed := make([]string, 0, len(hook.RequiredPaths()))
+				for _, path := range hook.RequiredPaths() {
+					if _, ok := merkelizedPaths[path]; !ok {
+						missed = append(missed, path)
+					}
+				}
+
+				doneCh <- fmt.Errorf("requirements for hook %q were never met. missing required paths: %s", hook.FullPath(), strings.Join(missed, ", "))
 				return
 			}
 
@@ -182,6 +196,11 @@ func WriteWithHooks(ctx context.Context, fs Filesystem, root File) (string, erro
 				doneCh <- err
 			}
 			waitingHooks = append(waitingHooks[i:], waitingHooks[:i+1]...)
+		}
+
+		finalPath, err = adder.Finalize()
+		if err != nil {
+			doneCh <- err
 		}
 
 		doneCh <- nil

@@ -41,5 +41,5 @@ type Adder interface {
 	Added() chan AddedFile
 	// In IPFS land close calls adder.Finalize() and adder.PinRoot()
 	// (files will only be pinned if the pin flag was set on NewAdder)
-	Close() error
+	Finalize() (string, error)
 }
