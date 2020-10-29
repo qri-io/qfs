@@ -88,7 +88,7 @@ func NewAdder(ctx context.Context, p pin.Pinner, bs bstore.GCBlockstore, ds ipld
 		Pin:        true,
 		Trickle:    false,
 		Wrap:       false,
-		Chunker:    "",
+		Chunker:    "rabin",
 	}, nil
 }
 
