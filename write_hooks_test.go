@@ -32,9 +32,9 @@ func TestWriteHooks(t *testing.T) {
 	}
 
 	root := NewMemdir("/a",
+		NewMemfileBytes("/a/d.txt", []byte("baz")),
 		NewWriteHookFile(NewMemfileBytes("/a/b.txt", []byte("foo")), rewriteB, "/a/d.txt"),
 		NewWriteHookFile(NewMemfileBytes("/a/c.txt", []byte("bar")), getBHash, "/a/b.txt"),
-		NewMemfileBytes("d.txt", []byte("baz")),
 	)
 
 	_, err := WriteWithHooks(ctx, fs, root)
@@ -79,8 +79,10 @@ func TestWriteHooksRollback(t *testing.T) {
 		t.Errorf("error mismatch. want: %q, got: %q", errMsg, err.Error())
 	}
 
-	expectCount := 0
+	expectCount := 1
 	if count := fs.ObjectCount(); count != expectCount {
 		t.Errorf("expected %d objects, got: %d", expectCount, count)
+		str, _ := fs.Print()
+		t.Logf(str)
 	}
 }

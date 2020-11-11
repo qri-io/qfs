@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-multihash"
@@ -47,6 +48,8 @@ func NewMemFS() *MemFS {
 type MemFS struct {
 	Pinned  bool
 	Network []*MemFS
+
+	filesLk sync.Mutex
 	Files   map[string]filer
 }
 
@@ -63,6 +66,9 @@ func (m MemFS) Type() string {
 
 // Print converts the store to a string
 func (m MemFS) Print() (string, error) {
+	m.filesLk.Lock()
+	defer m.filesLk.Unlock()
+
 	buf := &bytes.Buffer{}
 	for key, file := range m.Files {
 		f, err := file.File()
@@ -111,6 +117,7 @@ func (m *MemFS) Put(ctx context.Context, file File) (key string, err error) {
 }
 
 func (m *MemFS) put(ctx context.Context, file File) (key string, err error) {
+
 	if file.IsDirectory() {
 		buf := bytes.NewBuffer(nil)
 		dir := fsDir{
@@ -130,7 +137,9 @@ func (m *MemFS) put(ctx context.Context, file File) (key string, err error) {
 					}
 
 					key = dirhash
+					m.filesLk.Lock()
 					m.Files[dirhash] = dir
+					m.filesLk.Unlock()
 					return
 				}
 				err = fmt.Errorf("error getting next file: %s", err.Error())
@@ -143,7 +152,9 @@ func (m *MemFS) put(ctx context.Context, file File) (key string, err error) {
 				return
 			}
 			key = hash
+			m.filesLk.Lock()
 			dir.files[f.FileName()] = hash
+			m.filesLk.Unlock()
 			_, err = buf.WriteString(key + "\n")
 			if err != nil {
 				err = fmt.Errorf("error writing to buffer: %s", err.Error())
@@ -161,7 +172,9 @@ func (m *MemFS) put(ctx context.Context, file File) (key string, err error) {
 			err = fmt.Errorf("error hashing file data: %s", e.Error())
 			return
 		}
+		m.filesLk.Lock()
 		m.Files[hash] = fsFile{name: file.FileName(), path: file.FullPath(), data: data}
+		m.filesLk.Unlock()
 		key = hash
 		return
 	}
@@ -200,6 +213,9 @@ func (m *MemFS) getLocal(key string) (File, error) {
 		return nil, fmt.Errorf("key is required")
 	}
 
+	m.filesLk.Lock()
+	defer m.filesLk.Unlock()
+
 	log.Debugf("get hash=%q", parts[0])
 	// Check if the local MemFS has the file
 	f := m.Files[parts[0]]
@@ -234,6 +250,7 @@ func (m MemFS) Has(ctx context.Context, key string) (exists bool, err error) {
 
 // Delete removes the file from the store with the key
 func (m MemFS) Delete(ctx context.Context, key string) error {
+
 	key = strings.TrimPrefix(key, fmt.Sprintf("/%s/", MemFilestoreType))
 	// key may be of the form /mem/QmFoo/file.json but MemFS indexes its maps
 	// using keys like /mem/QmFoo. Trim after the second part of the key.
@@ -248,7 +265,9 @@ func (m MemFS) Delete(ctx context.Context, key string) error {
 
 	// TODO (b5)
 	log.Debugf("deleting root hash=%q", parts[0])
+	m.filesLk.Lock()
 	delete(m.Files, parts[0])
+	m.filesLk.Unlock()
 	return nil
 	// return m.walkRm(parts[0])
 }
@@ -348,6 +367,7 @@ func (a *adder) addNode(f File) *nd {
 
 func (a *adder) AddFile(ctx context.Context, f File) (err error) {
 	log.Debugf("Adder.AddFile FullPath=%s", f.FullPath())
+
 	node := a.addNode(f)
 	var hash string
 
@@ -358,7 +378,9 @@ func (a *adder) AddFile(ctx context.Context, f File) (err error) {
 			return err
 		}
 		log.Debugf("adding directory path=%s dir=%v", hash, dir.files)
+		a.fs.filesLk.Lock()
 		a.fs.Files[hash] = dir
+		a.fs.filesLk.Unlock()
 		node.hash = hash
 	} else {
 		hash, err = a.fs.put(ctx, f)
@@ -392,7 +414,10 @@ func (a *adder) Finalize() (string, error) {
 	root := NewMemdir("/")
 	node := a.addNode(root)
 	hash, dir := node.toDir(&a.fs)
+	a.fs.filesLk.Lock()
 	a.fs.Files[hash] = dir
+	a.fs.filesLk.Unlock()
+
 	node.hash = hash
 
 	hash = fmt.Sprintf("/%s/%s", MemFilestoreType, hash)
