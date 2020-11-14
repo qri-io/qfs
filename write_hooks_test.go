@@ -79,7 +79,7 @@ func TestWriteHooksRollback(t *testing.T) {
 		t.Errorf("error mismatch. want: %q, got: %q", errMsg, err.Error())
 	}
 
-	expectCount := 1
+	expectCount := 2
 	if count := fs.ObjectCount(); count != expectCount {
 		t.Errorf("expected %d objects, got: %d", expectCount, count)
 		str, _ := fs.Print()

@@ -105,15 +105,17 @@ func WriteWithHooks(ctx context.Context, fs Filesystem, root File) (string, erro
 
 	var rollback = func() {
 		log.Debug("rolling back failed write operation")
-		for _, path := range merkelizedPaths {
-			if err := fs.Delete(ctx, path); err != nil {
-				log.Debugf("error removing path: %s: %s", path, err)
-			}
-		}
+		// TODO (b5) - we can't run rollbacks without a "soft delete" command that
+		// won't remove pinned blocks. Otherwise a failed Adder might delete blocks
+		// created by a valid operation
+		// for _, path := range merkelizedPaths {
+		// 	if err := fs.Delete(ctx, path); err != nil {
+		// 		log.Debugf("error removing path: %s: %s", path, err)
+		// 	}
+		// }
 	}
 	defer func() {
 		if rollback != nil {
-			log.Debug("InitDataset rolling back...")
 			rollback()
 		}
 	}()
@@ -187,7 +189,7 @@ func WriteWithHooks(ctx context.Context, fs Filesystem, root File) (string, erro
 					}
 				}
 
-				doneCh <- fmt.Errorf("requirements for hook %q were never met. missing required paths: %s", hook.FullPath(), strings.Join(missed, ", "))
+				doneCh <- fmt.Errorf("requirements for hook %q were never met. missing paths: %s", hook.FullPath(), strings.Join(missed, ", "))
 				return
 			}
 
@@ -198,18 +200,20 @@ func WriteWithHooks(ctx context.Context, fs Filesystem, root File) (string, erro
 			waitingHooks = append(waitingHooks[i:], waitingHooks[:i+1]...)
 		}
 
-		finalPath, err = adder.Finalize()
-		if err != nil {
-			doneCh <- err
-		}
-
 		doneCh <- nil
 	}()
 
 	err = <-doneCh
+	log.Debug("done adding")
 	if err != nil {
 		log.Debugf("writing dataset: %q", err)
 		return finalPath, err
+	}
+
+	log.Debugf("finalizing adder")
+	finalPath, err = adder.Finalize()
+	if err != nil {
+		doneCh <- err
 	}
 
 	log.Debugf("dataset written to filesystem. path=%q", finalPath)
