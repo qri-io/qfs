@@ -50,6 +50,7 @@ type Filestore struct {
 var (
 	_ qfs.ReleasingFilesystem = (*Filestore)(nil)
 	_ cafs.Fetcher            = (*Filestore)(nil)
+	_ qfs.CAFS                = (*Filestore)(nil)
 )
 
 // NewFilesystem creates a new local filesystem PathResolver
@@ -149,6 +150,9 @@ const FilestoreType = "ipfs"
 func (fst Filestore) Type() string {
 	return FilestoreType
 }
+
+// IsContentAddressedFilesystem declares qipfs is content-addressed
+func (fst Filestore) IsContentAddressedFilesystem() {}
 
 // Done implements the qfs.ReleasingFilesystem interface
 func (fst *Filestore) Done() <-chan struct{} {

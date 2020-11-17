@@ -53,19 +53,25 @@ type MemFS struct {
 	Files   map[string]filer
 }
 
-// compile-time assertion that MemFS satisfies the Filesystem interface
-var _ Filesystem = (*MemFS)(nil)
+var (
+	// compile-time assertion that MemFS satisfies the Filesystem interface
+	_ Filesystem = (*MemFS)(nil)
+	// assert MemFS implements the CAFS interface
+	_ CAFS = (*MemFS)(nil)
+)
 
 // MemFilestoreType uniquely identifies the mem filestore
 const MemFilestoreType = "mem"
 
 // Type distinguishes this filesystem from others by a unique string prefix
-func (m MemFS) Type() string {
+func (m *MemFS) Type() string {
 	return MemFilestoreType
 }
 
+func (m *MemFS) IsContentAddressedFilesystem() {}
+
 // Print converts the store to a string
-func (m MemFS) Print() (string, error) {
+func (m *MemFS) Print() (string, error) {
 	m.filesLk.Lock()
 	defer m.filesLk.Unlock()
 
@@ -90,7 +96,7 @@ func (m MemFS) Print() (string, error) {
 }
 
 // ObjectCount returns the number of content-addressed objects in the store
-func (m MemFS) ObjectCount() (objects int) {
+func (m *MemFS) ObjectCount() (objects int) {
 	for range m.Files {
 		objects++
 	}
@@ -241,7 +247,7 @@ func (m *MemFS) getLocal(key string) (File, error) {
 }
 
 // Has returns whether the store has a File with the key
-func (m MemFS) Has(ctx context.Context, key string) (exists bool, err error) {
+func (m *MemFS) Has(ctx context.Context, key string) (exists bool, err error) {
 	if _, err := m.getLocal(key); err == nil {
 		return true, nil
 	}
@@ -249,7 +255,7 @@ func (m MemFS) Has(ctx context.Context, key string) (exists bool, err error) {
 }
 
 // Delete removes the file from the store with the key
-func (m MemFS) Delete(ctx context.Context, key string) error {
+func (m *MemFS) Delete(ctx context.Context, key string) error {
 
 	key = strings.TrimPrefix(key, fmt.Sprintf("/%s/", MemFilestoreType))
 	// key may be of the form /mem/QmFoo/file.json but MemFS indexes its maps
@@ -321,7 +327,7 @@ func (m *MemFS) AddConnection(other *MemFS) {
 }
 
 type adder struct {
-	fs   MemFS
+	fs   *MemFS
 	pin  bool
 	out  chan AddedFile
 	root string
@@ -329,7 +335,7 @@ type adder struct {
 }
 
 // NewAdder returns an Adder for the store
-func (m MemFS) NewAdder(ctx context.Context, pin, wrap bool) (Adder, error) {
+func (m *MemFS) NewAdder(ctx context.Context, pin, wrap bool) (Adder, error) {
 	addedOut := make(chan AddedFile, 9)
 	return &adder{
 		fs:   m,
@@ -373,7 +379,7 @@ func (a *adder) AddFile(ctx context.Context, f File) (err error) {
 
 	if f.IsDirectory() {
 		var dir fsDir
-		hash, dir = node.toDir(&a.fs)
+		hash, dir = node.toDir(a.fs)
 		if err != nil {
 			return err
 		}
@@ -413,7 +419,7 @@ func (a *adder) Finalize() (string, error) {
 	log.Debugf("adding root directory")
 	root := NewMemdir("/")
 	node := a.addNode(root)
-	hash, dir := node.toDir(&a.fs)
+	hash, dir := node.toDir(a.fs)
 	a.fs.filesLk.Lock()
 	a.fs.Files[hash] = dir
 	a.fs.filesLk.Unlock()

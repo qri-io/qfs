@@ -79,6 +79,14 @@ type PinningFS interface {
 	Unpin(ctx context.Context, key string, recursive bool) error
 }
 
+// CAFS stands for "content-addressed filesystem". Filesystem that implement
+// this interface declare that  all paths to persisted content are reference-by
+// -hash.
+// TODO (b5) - write up a spec test suite for CAFS conformance
+type CAFS interface {
+	IsContentAddressedFilesystem()
+}
+
 // AbsPath adjusts the provided string to a path lib functions can work with
 // because paths for Qri can come from the local filesystem, an http url, or
 // the distributed web, Absolutizing is a little tricky
