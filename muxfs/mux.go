@@ -62,11 +62,21 @@ func (m *Mux) Filesystem(fsType string) qfs.Filesystem {
 	return m.handlers[fsType]
 }
 
+// KnownFSTypes gives the set of filesystems known to muxfs.New
+func KnownFSTypes() []string {
+	return []string{
+		httpfs.FilestoreType,
+		qipfs.FilestoreType,
+		localfs.FilestoreType,
+		qfs.MemFilestoreType,
+	}
+}
+
 // constructors maps filesystem type strings to constructor functions
 var constructors = map[string]qfs.Constructor{
+	httpfs.FilestoreType:  httpfs.NewFilesystem,
 	qipfs.FilestoreType:   qipfs.NewFilesystem,
 	localfs.FilestoreType: localfs.NewFilesystem,
-	httpfs.FilestoreType:  httpfs.NewFilesystem,
 	qfs.MemFilestoreType:  qfs.NewMemFilesystem,
 }
 

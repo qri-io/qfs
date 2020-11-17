@@ -17,10 +17,6 @@ var (
 	ErrReadOnly = errors.New("readonly filesystem")
 )
 
-// func init() {
-// 	logger.SetLogLevel("qfs", "debug")
-// }
-
 // PathResolver is the "get" portion of a Filesystem
 type PathResolver interface {
 	Get(ctx context.Context, path string) (File, error)

@@ -7,7 +7,7 @@ import (
 
 // ErrNotAddingFS is the canonical error to return when the AddingFS extension
 // interface is required but not available
-var ErrNotAddingFS = errors.New("This filesystem doesn't support batched adding")
+var ErrNotAddingFS = errors.New("this filesystem doesn't support batched adding")
 
 // AddedFile reports on the results of adding a file to the store
 type AddedFile struct {
