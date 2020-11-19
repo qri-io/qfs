@@ -111,10 +111,7 @@ func (m MapStore) Print() (string, error) {
 
 // ObjectCount returns the number of content-addressed objects in the store
 func (m MapStore) ObjectCount() (objects int) {
-	for range m.Files {
-		objects++
-	}
-	return objects
+	return len(m.Files)
 }
 
 // PutFileAtKey puts the file at the given key

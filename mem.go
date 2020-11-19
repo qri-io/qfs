@@ -97,13 +97,11 @@ func (m *MemFS) Print() (string, error) {
 
 // ObjectCount returns the number of content-addressed objects in the store
 func (m *MemFS) ObjectCount() (objects int) {
-	for range m.Files {
-		objects++
-	}
-	return objects
+	return len(m.Files)
 }
 
 // PutFileAtKey puts the file at the given key
+// Deprecated - this method breaks CAFS interface assertions. Don't use it.
 func (m *MemFS) PutFileAtKey(ctx context.Context, key string, file File) error {
 	if file.IsDirectory() {
 		return fmt.Errorf("PutFileAtKey does not work with directories")
@@ -119,7 +117,7 @@ func (m *MemFS) PutFileAtKey(ctx context.Context, key string, file File) error {
 // Put adds a file to the store
 func (m *MemFS) Put(ctx context.Context, file File) (key string, err error) {
 	key, err = m.put(ctx, file)
-	return fmt.Sprintf("/mem/%s", key), err
+	return fmt.Sprintf("/%s/%s", MemFilestoreType, key), err
 }
 
 func (m *MemFS) put(ctx context.Context, file File) (key string, err error) {

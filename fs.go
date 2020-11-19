@@ -29,7 +29,7 @@ type Filesystem interface {
 	// and "http"
 	// types are used as path prefixes when multiplexing filesystems
 	Type() string
-	// Has returns whether the `key` is mapped to a `value`.
+	// Has returns whether the `path` is mapped to a value.
 	// In some contexts, it may be much cheaper only to check for existence of
 	// a value, rather than retrieving the value itself. (e.g. HTTP HEAD).
 	// The default implementation is found in `GetBackedHas`.

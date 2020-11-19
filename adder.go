@@ -31,10 +31,10 @@ type AddingFS interface {
 // Adder is the interface for adding files to a Filestore. The addition process
 // is parallelized. Implementers must make all required AddFile calls, then call
 // Close to finalize the addition process. Progress can be monitored through the
-// Added() channel
+// Added() channel, which emits once per written file
 type Adder interface {
 	// AddFile adds a file or directory of files to the store
-	// this function will return immideately, consumers should read
+	// this function will return immediately, consumers should read
 	// from the Added() channel to see the results of file addition.
 	AddFile(context.Context, File) error
 	// Added gives a channel to read added files from.

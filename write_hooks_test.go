@@ -2,6 +2,7 @@ package qfs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -60,12 +61,15 @@ func TestWriteHooks(t *testing.T) {
 func TestWriteHooksRollback(t *testing.T) {
 	ctx := context.Background()
 	fs := NewMemFS()
-	errMsg := "oh noes it broke"
+	errOhNoes := fmt.Errorf("oh noes it broke")
 
 	failHook := func(ctx context.Context, f File, pathMap map[string]string) (io.Reader, error) {
-		return nil, fmt.Errorf(errMsg)
+		return nil, errOhNoes
 	}
 
+	// here /a/b.txt depends on /a/d.txt, a sibling file
+	// /a/c.txt has no dependencies, and exists to ensure the adder properly tracks
+	// and finalizes file /a/b.txt
 	root := NewMemdir("/a",
 		NewWriteHookFile(NewMemfileBytes("b.txt", []byte("foo")), failHook, "/a/d.txt"),
 		NewMemfileBytes("c.txt", []byte("bar")),
@@ -75,8 +79,8 @@ func TestWriteHooksRollback(t *testing.T) {
 	_, err := WriteWithHooks(ctx, fs, root)
 	if err == nil {
 		t.Errorf("expected error, got nil")
-	} else if err.Error() != errMsg {
-		t.Errorf("error mismatch. want: %q, got: %q", errMsg, err.Error())
+	} else if !errors.Is(err, errOhNoes) {
+		t.Errorf("error mismatch. want: %q, got: %q", errOhNoes, err)
 	}
 
 	expectCount := 2

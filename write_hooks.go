@@ -26,7 +26,7 @@ type hookFile struct {
 	callback WriteHook
 }
 
-// Assert hookFile implements HookFile at compile time
+// Assert WriteHookFile implements HookFile at compile time
 var _ WriteHookFile = (*hookFile)(nil)
 
 // WriteHookFile is a file that can hook into the merkelization process, affecting
