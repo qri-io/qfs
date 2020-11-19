@@ -84,6 +84,19 @@ func (lfs *FS) Type() string {
 	return FilestoreType
 }
 
+// Has returns whether the store has a File with the key
+func (lfs *FS) Has(ctx context.Context, path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
+}
+
 // Get implements qfs.PathResolver
 func (lfs *FS) Get(ctx context.Context, path string) (qfs.File, error) {
 	fi, err := os.Stat(path)

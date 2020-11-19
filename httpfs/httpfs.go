@@ -81,6 +81,12 @@ func (httpfs *FS) Type() string {
 	return FilestoreType
 }
 
+// Has returns whether the store has a File with the key
+// https has no caching strategy, so it'll always return false
+func (https *FS) Has(ctx context.Context, path string) (bool, error) {
+	return false, nil
+}
+
 // Get implements qfs.PathResolver
 func (httpfs *FS) Get(ctx context.Context, path string) (qfs.File, error) {
 	req, err := http.NewRequest("GET", path, nil)

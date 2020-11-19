@@ -11,8 +11,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/qri-io/qfs"
-	"github.com/qri-io/qfs/cafs"
-	"github.com/qri-io/qfs/cafs/test"
 	"github.com/qri-io/qfs/qipfs/qipfs_http"
 )
 
@@ -30,15 +28,6 @@ func TestFS(t *testing.T) {
 	if err != nil {
 		t.Errorf("error creating filestore: %s", err.Error())
 		return
-	}
-
-	cafs, ok := f.(cafs.Filestore)
-	if !ok {
-		t.Errorf("error, filesystem should be of type cafs.Filestore")
-	}
-	err = test.EnsureFilestoreBehavior(cafs)
-	if err != nil {
-		t.Errorf(err.Error())
 	}
 
 	releasingFS, ok := f.(qfs.ReleasingFilesystem)

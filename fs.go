@@ -5,9 +5,12 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+
+	logger "github.com/ipfs/go-log"
 )
 
 var (
+	log = logger.Logger("qfs")
 	// ErrNotFound is the canonical error for not finding a value
 	ErrNotFound = errors.New("path not found")
 	// ErrReadOnly is a sentinel value for Filesystems that aren't writable
@@ -26,6 +29,11 @@ type Filesystem interface {
 	// and "http"
 	// types are used as path prefixes when multiplexing filesystems
 	Type() string
+	// Has returns whether the `path` is mapped to a value.
+	// In some contexts, it may be much cheaper only to check for existence of
+	// a value, rather than retrieving the value itself. (e.g. HTTP HEAD).
+	// The default implementation is found in `GetBackedHas`.
+	Has(ctx context.Context, path string) (exists bool, err error)
 	// Get fetching files and directories from path strings.
 	// in practice path strings can be things like:
 	// * a local filesystem
@@ -63,6 +71,20 @@ type ReleasingFilesystem interface {
 // persisted resources
 type Destroyer interface {
 	Destroy() error
+}
+
+// PinningFS interface for content stores that support the concept of pinnings
+type PinningFS interface {
+	Pin(ctx context.Context, key string, recursive bool) error
+	Unpin(ctx context.Context, key string, recursive bool) error
+}
+
+// CAFS stands for "content-addressed filesystem". Filesystem that implement
+// this interface declare that  all paths to persisted content are reference-by
+// -hash.
+// TODO (b5) - write up a spec test suite for CAFS conformance
+type CAFS interface {
+	IsContentAddressedFilesystem()
 }
 
 // AbsPath adjusts the provided string to a path lib functions can work with

@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/qri-io/qfs"
-	"github.com/qri-io/qfs/cafs"
 	"github.com/qri-io/qfs/httpfs"
 	"github.com/qri-io/qfs/localfs"
 	"github.com/qri-io/qfs/qipfs"
@@ -16,8 +15,8 @@ import (
 // It's a way to use multiple filesystem implementations as a single FS
 type Mux struct {
 	handlers map[string]qfs.Filesystem
-	// sophisticated writes require a legacy cafs.Filesystem interface
-	// the first configured filesystem that implements cafs.Filesystem
+	// sophisticated writes require the Adder interface for writing with hooks.
+	// the first configured filesystem that implements qfs.AddingFS
 	// will be set to this string, and returned by the DefaultWriteFS method
 	defaultWriteDestination string
 
@@ -48,7 +47,7 @@ func (m *Mux) SetFilesystem(fs qfs.Filesystem) error {
 		}(releaser)
 	}
 	if m.defaultWriteDestination == "" {
-		if _, ok := fs.(cafs.Filestore); ok {
+		if _, ok := fs.(qfs.AddingFS); ok {
 			m.defaultWriteDestination = fs.Type()
 		}
 	}
@@ -63,19 +62,28 @@ func (m *Mux) Filesystem(fsType string) qfs.Filesystem {
 	return m.handlers[fsType]
 }
 
+// KnownFSTypes gives the set of filesystems known to muxfs.New
+func KnownFSTypes() []string {
+	return []string{
+		httpfs.FilestoreType,
+		qipfs.FilestoreType,
+		localfs.FilestoreType,
+		qfs.MemFilestoreType,
+	}
+}
+
 // constructors maps filesystem type strings to constructor functions
 var constructors = map[string]qfs.Constructor{
+	httpfs.FilestoreType:  httpfs.NewFilesystem,
 	qipfs.FilestoreType:   qipfs.NewFilesystem,
 	localfs.FilestoreType: localfs.NewFilesystem,
-	httpfs.FilestoreType:  httpfs.NewFilesystem,
 	qfs.MemFilestoreType:  qfs.NewMemFilesystem,
-	cafs.MapFilestoreType: cafs.NewMapFilesystem,
 }
 
 // New creates a new Mux Filesystem, if no Option funcs are provided,
 // New uses a default set of Option funcs. Any Option functions passed to this
 // function must check whether their fields are nil or not.
-// The first configured filesystem that implements the cafs.Filestore interface
+// The first configured filesystem that implements the qfs.AddingFS interface
 // becomes the default filesystem returned by DefaultWriteFS
 func New(ctx context.Context, cfgs []qfs.Config) (*Mux, error) {
 	mux := &Mux{
@@ -127,6 +135,21 @@ func noMuxerError(kind, path string) error {
 	return fmt.Errorf("cannot resolve paths of kind '%s'. path: %s", kind, path)
 }
 
+// Has returns whether the store has a File with the given path
+func (m *Mux) Has(ctx context.Context, path string) (bool, error) {
+	if path == "" {
+		return false, nil
+	}
+
+	kind := qfs.PathKind(path)
+	handler, ok := m.handlers[kind]
+	if !ok {
+		return false, noMuxerError(kind, path)
+	}
+
+	return handler.Has(ctx, path)
+}
+
 // Get a path
 func (m *Mux) Get(ctx context.Context, path string) (qfs.File, error) {
 	if path == "" {
@@ -167,10 +190,9 @@ func (m *Mux) Delete(ctx context.Context, path string) (err error) {
 }
 
 // DefaultWriteFS gives the muxer's configured write destination
-// for legacy reasons, the returned destination must be a cafs.Filestore
-func (m *Mux) DefaultWriteFS() cafs.Filestore {
+func (m *Mux) DefaultWriteFS() qfs.Filesystem {
 	if m.defaultWriteDestination != "" {
-		return m.handlers[m.defaultWriteDestination].(cafs.Filestore)
+		return m.handlers[m.defaultWriteDestination]
 	}
 	return nil
 }

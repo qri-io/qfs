@@ -30,7 +30,6 @@ func TestDefaultNewMux(t *testing.T) {
 		{Type: "http"},
 		{Type: "local"},
 		{Type: "mem"},
-		{Type: "map"},
 	}
 	mfs, err := New(ctx, cfg)
 	if err != nil {
@@ -42,7 +41,6 @@ func TestDefaultNewMux(t *testing.T) {
 		"http",
 		"local",
 		"mem",
-		"map",
 	} {
 		if mfs.Filesystem(fsType) == nil {
 			t.Errorf("expected filesystem for %q, got nil", fsType)

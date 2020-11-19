@@ -82,28 +82,30 @@ type PathSetter interface {
 	SetPath(path string)
 }
 
-// Walk traverses a file tree calling visit on each node
-func Walk(root File, depth int, visit func(f File, depth int) error) (err error) {
-	if err := visit(root, depth); err != nil {
-		return err
-	}
-
+// Walk traverses a file tree from the bottom-up calling visit on each file
+// and directory within the tree
+func Walk(root File, visit func(f File) error) (err error) {
 	if root.IsDirectory() {
 		for {
 			f, err := root.NextFile()
 			if err != nil {
 				if err.Error() == "EOF" {
-					break
+					return visit(root)
 				} else {
 					return err
 				}
 			}
 
-			if err := Walk(f, depth+1, visit); err != nil {
+			if err := Walk(f, visit); err != nil {
 				return err
 			}
 		}
+	} else {
+		if err := visit(root); err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 
@@ -236,7 +238,6 @@ func (Memdir) IsDirectory() bool {
 // Returning io.EOF when no files remain
 func (m *Memdir) NextFile() (File, error) {
 	if m.fi >= len(m.links) {
-		m.fi = 0
 		return nil, io.EOF
 	}
 	defer func() { m.fi++ }()
