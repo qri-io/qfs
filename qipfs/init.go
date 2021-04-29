@@ -16,7 +16,6 @@ import (
 	config "github.com/ipfs/go-ipfs-config"
 	"github.com/ipfs/go-ipfs/assets"
 	"github.com/ipfs/go-ipfs/core"
-	"github.com/ipfs/go-ipfs/namesys"
 	"github.com/ipfs/go-ipfs/plugin/loader"
 	"github.com/ipfs/go-ipfs/repo/fsrepo"
 )
@@ -136,7 +135,7 @@ func doInit(out io.Writer, repoRoot string, empty bool, nBitsForKeypair int, con
 		}
 	}
 
-	return initializeIpnsKeyspace(repoRoot)
+	return nil
 }
 
 func checkWriteable(dir string) error {
@@ -194,47 +193,6 @@ func addDefaultAssets(out io.Writer, repoRoot string) error {
 
 	_, err = fmt.Fprintf(out, "\n\tipfs cat /ipfs/%s/readme\n\n", dkey)
 	return err
-}
-
-// func initializeIpnsKeyspace(repoRoot string) error {
-// 	ctx, cancel := context.WithCancel(context.Background())
-// 	defer cancel()
-
-// 	r, err := fsrepo.Open(repoRoot)
-// 	if err != nil { // NB: repo is owned by the node
-// 		return err
-// 	}
-
-// 	nd, err := core.NewNode(ctx, &core.BuildCfg{Repo: r})
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer nd.Close()
-
-// 	// err = nd.SetupOfflineRouting()
-// 	// if err != nil {
-// 	// 	return err
-// 	// }
-
-// 	return namesys.InitializeKeyspace(ctx, nd.Namesys, nd.Pinning, nd.PrivateKey)
-// }
-
-func initializeIpnsKeyspace(repoRoot string) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	r, err := fsrepo.Open(repoRoot)
-	if err != nil { // NB: repo is owned by the node
-		return err
-	}
-
-	nd, err := core.NewNode(ctx, &core.BuildCfg{Repo: r})
-	if err != nil {
-		return err
-	}
-	defer nd.Close()
-
-	return namesys.InitializeKeyspace(ctx, nd.Namesys, nd.Pinning, nd.PrivateKey)
 }
 
 var (
