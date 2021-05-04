@@ -1,3 +1,29 @@
+<a name="v0.6.0"></a>
+# [v0.6.0](https://github.com/qri-io/qfs/compare/v0.5.0...v) (2021-05-04)
+
+This latests release adds a new important `WriteWithHooks` function that runs a hook for each file written to the filesystem, rolling back any writes if there are errors. This opens the door for progress updates, as well as adjusting subsequent files on the fly based on previous writes.
+
+We've also added a new `DisableBootstrap` option to the qfs config, that allows you to run your node without bootstrapping to the network, as well as adding support for "PUT" over ipfs http.
+
+Finally, we've fixed an important bug in linux distros, that allows copying the underlying filesystem on a cross-linked device.
+
+### Bug Fixes
+
+* **adder:** failed adds don't remove blocks because we don't have 'soft delete' ([20e9e18](https://github.com/qri-io/qfs/commit/20e9e18))
+* **linux:** migration fix for copying on cross link device ([8bdb020](https://github.com/qri-io/qfs/commit/8bdb020))
+
+
+### Features
+
+* **cafs:** MerkelizeHooks to modify DAG persistence mid-flight ([164aadc](https://github.com/qri-io/qfs/commit/164aadc))
+* **CAFS:** repurpose CAFS acronym as a filesystem property ([0e309e0](https://github.com/qri-io/qfs/commit/0e309e0))
+* **ipfs_http:** support PUT on IPFS over http ([b257edd](https://github.com/qri-io/qfs/commit/b257edd))
+* **mux:** add KnownFSTypes to list filesystem prefixes ([f5c12e4](https://github.com/qri-io/qfs/commit/f5c12e4))
+* **qipfs:** add `DisableBootstrap` as qipfs config option ([75277f1](https://github.com/qri-io/qfs/commit/75277f1))
+* **qipfs:** use rabin chunker ([e0a6727](https://github.com/qri-io/qfs/commit/e0a6727))
+
+
+
 <a name="v0.5.0"></a>
 # [v0.5.0](https://github.com/qri-io/qfs/compare/v0.4.2...v0.5.0) (2020-06-29)
 
