@@ -1,6 +1,8 @@
 package qfs
 
 import (
+	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -51,6 +53,25 @@ func TestMemfile(t *testing.T) {
 
 	if diff := cmp.Diff(expectPaths, paths); diff != "" {
 		t.Errorf("visited paths mismatch. (-want +got):\n%s", diff)
+	}
+}
+
+func TestSizeFile(t *testing.T) {
+	cases := []struct {
+		file SizeFile
+		size int64
+	}{
+		{NewMemfileBytes("", []byte{0, 1, 2, 3, 4, 5}), 6},
+		{NewMemfileReader("", &bytes.Buffer{}), -1},
+		{NewMemfileReaderSize("", &bytes.Buffer{}, 10), 10},
+	}
+
+	for i, c := range cases {
+		t.Run(fmt.Sprintf("case_%d", i), func(t *testing.T) {
+			if c.size != c.file.Size() {
+				t.Errorf("size mismatch. want: %d got: %d ", c.size, c.file.Size())
+			}
+		})
 	}
 }
 

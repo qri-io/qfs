@@ -56,26 +56,14 @@ type File interface {
 	MediaType() string
 }
 
-// type StatFile interface {
-// 	File
-// 	Stat() os.FileInfo
-// }
-
-// type PeekFile interface {
-// 	SizeFile
-// 	Peek(n int) File
-// 	Length() int
-// }
-
-// type SizeFile interface {
-// 	File
-// 	Size() (int64, error)
-// }
-
-// type FileInfo interface {
-// 	AbsPath() string
-// 	Stat() os.FileInfo
-// }
+// SizeFile is an opt-in interface for giving the length of a file in bytes.
+// Implementations must return -1 when SizeFile is implemented but size is
+// unknown.
+// Directories should either not implement SizeFile or always return -1
+type SizeFile interface {
+	File
+	Size() int64
+}
 
 // PathSetter adds the capacity to modify a path property
 type PathSetter interface {
@@ -111,17 +99,26 @@ func Walk(root File, visit func(f File) error) (err error) {
 
 // Memfile is an in-memory file
 type Memfile struct {
+	size    int64
 	buf     io.Reader
 	path    string
 	modTime time.Time
 }
 
-// Confirm that Memfile satisfies the File interface
-var _ = (File)(&Memfile{})
+var (
+	_ File     = (*Memfile)(nil)
+	_ SizeFile = (*Memfile)(nil)
+)
 
 // NewMemfileReader creates a file from an io.Reader
 func NewMemfileReader(path string, r io.Reader) *Memfile {
+	return NewMemfileReaderSize(path, r, -1)
+}
+
+// NewMemfileReaderSize constructs a memfile with a known size
+func NewMemfileReaderSize(path string, r io.Reader, size int64) *Memfile {
 	return &Memfile{
+		size:    size,
 		buf:     r,
 		path:    path,
 		modTime: time.Now(),
@@ -131,6 +128,7 @@ func NewMemfileReader(path string, r io.Reader) *Memfile {
 // NewMemfileBytes creates a file from a byte slice
 func NewMemfileBytes(path string, data []byte) *Memfile {
 	return &Memfile{
+		size:    int64(len(data)),
 		buf:     bytes.NewBuffer(data),
 		path:    path,
 		modTime: time.Now(),
@@ -184,6 +182,10 @@ func (m Memfile) MediaType() string {
 // ModTime returns the last-modified time for this file
 func (m Memfile) ModTime() time.Time {
 	return m.modTime
+}
+
+func (m Memfile) Size() int64 {
+	return m.size
 }
 
 // Memdir is an in-memory directory
