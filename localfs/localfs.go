@@ -118,8 +118,9 @@ func (lfs *FS) Get(ctx context.Context, path string) (qfs.File, error) {
 	}
 
 	return &LocalFile{
-		path: path,
 		File: *f,
+		info: fi,
+		path: path,
 	}, nil
 }
 
@@ -168,10 +169,14 @@ func (lfs *FS) Delete(ctx context.Context, path string) (err error) {
 // LocalFile implements qfs.File with a filesystem file
 type LocalFile struct {
 	os.File
+	info os.FileInfo
 	path string
 }
 
-var _ qfs.File = (*LocalFile)(nil)
+var (
+	_ qfs.File     = (*LocalFile)(nil)
+	_ qfs.SizeFile = (*LocalFile)(nil)
+)
 
 // IsDirectory satisfies the qfs.File interface
 func (lf *LocalFile) IsDirectory() bool {
@@ -205,4 +210,8 @@ func (lf *LocalFile) ModTime() time.Time {
 		return time.Time{}
 	}
 	return st.ModTime()
+}
+
+func (lf *LocalFile) Size() int64 {
+	return lf.info.Size()
 }
