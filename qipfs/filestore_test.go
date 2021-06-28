@@ -183,7 +183,6 @@ func TestPinsetDifference(t *testing.T) {
 
 	expect := map[string]struct{}{
 		"/ipld/QmQPeNsJPyVWPFDVHb77w8G42Fvo15z4bG2X8D2GhfbSXc": {},
-		"/ipld/QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn": {},
 	}
 	if diff := cmp.Diff(expect, got); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
@@ -202,9 +201,7 @@ func TestPinsetDifference(t *testing.T) {
 		got[path] = struct{}{}
 	}
 
-	expect = map[string]struct{}{
-		"/ipld/QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn": {},
-	}
+	expect = map[string]struct{}{}
 	if diff := cmp.Diff(expect, got); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
