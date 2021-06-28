@@ -27,7 +27,6 @@ import (
 	caopts "github.com/ipfs/interface-go-ipfs-core/options"
 	"github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/qri-io/qfs"
-	cafs "github.com/qri-io/qfs/cafs"
 	files "github.com/qri-io/qfs/qipfs/go-ipfs-files"
 	"github.com/qri-io/qfs/qipfs/qipfs_http"
 )
@@ -49,7 +48,7 @@ type Filestore struct {
 
 var (
 	_ qfs.ReleasingFilesystem = (*Filestore)(nil)
-	_ cafs.Fetcher            = (*Filestore)(nil)
+	_ qfs.AddingFS            = (*Filestore)(nil)
 	_ qfs.CAFS                = (*Filestore)(nil)
 )
 
@@ -253,10 +252,6 @@ func (fst *Filestore) Get(ctx context.Context, key string) (qfs.File, error) {
 	return fst.getKey(ctx, key)
 }
 
-func (fst *Filestore) Fetch(ctx context.Context, source cafs.Source, key string) (qfs.File, error) {
-	return fst.getKey(ctx, key)
-}
-
 // Put adds a file and pins
 func (fst *Filestore) Put(ctx context.Context, file qfs.File) (key string, err error) {
 	hash, err := fst.AddFile(file, true)
@@ -294,7 +289,7 @@ func (fst *Filestore) getKey(ctx context.Context, key string) (qfs.File, error) 
 	return nil, fmt.Errorf("path is neither a file nor a directory")
 }
 
-// Adder wraps a coreunix adder to conform to the cafs adder interface
+// Adder wraps a coreunix adder to implement AddingFS
 type Adder struct {
 	adder *coreunix.Adder
 	out   chan interface{}

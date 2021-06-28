@@ -13,7 +13,6 @@ import (
 	"github.com/mitchellh/mapstructure"
 	httpapi "github.com/qri-io/go-ipfs-http-client"
 	qfs "github.com/qri-io/qfs"
-	cafs "github.com/qri-io/qfs/cafs"
 	files "github.com/qri-io/qfs/qipfs/go-ipfs-files"
 )
 
@@ -42,7 +41,7 @@ func mapToConfig(cfgMap map[string]interface{}) (*FSConfig, error) {
 
 // NewFilesystem creates a new ipfs http path resolver
 // from a config map with no options
-func NewFilesystem(cfgMap map[string]interface{}) (cafs.Filestore, error) {
+func NewFilesystem(cfgMap map[string]interface{}) (qfs.Filesystem, error) {
 	cfg, err := mapToConfig(cfgMap)
 	if err != nil {
 		return nil, err
@@ -90,10 +89,6 @@ func (fst *Filestore) Get(ctx context.Context, key string) (qfs.File, error) {
 	return fst.getKey(ctx, key)
 }
 
-func (fst *Filestore) Fetch(ctx context.Context, source cafs.Source, key string) (qfs.File, error) {
-	return fst.getKey(ctx, key)
-}
-
 func (fst *Filestore) Put(ctx context.Context, file qfs.File) (string, error) {
 	resolvedPath, err := fst.capi.Unixfs().Add(ctx, wrapFile{file})
 	if err != nil {
@@ -128,10 +123,6 @@ func (fst *Filestore) getKey(ctx context.Context, key string) (qfs.File, error) 
 	// }
 
 	return nil, fmt.Errorf("path is neither a file nor a directory")
-}
-
-func (fst *Filestore) NewAdder(pin, wrap bool) (cafs.Adder, error) {
-	return nil, fmt.Errorf("ipfs_http does not support adders")
 }
 
 func pathFromHash(hash string) string {
