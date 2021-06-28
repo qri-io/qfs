@@ -58,7 +58,7 @@ func InternalizeIPFSRepo(ipfsRepoPath, newRepoPath string) error {
 
 	// migrate the copied ipfs repo
 	os.Setenv("IPFS_PATH", tmpDir)
-	if err := Migrate(context.Background()); err != nil {
+	if err := Migrate(context.Background(), ""); err != nil {
 		return fmt.Errorf("error migrating ipfs repo: %w", err)
 	}
 
@@ -79,12 +79,12 @@ func InternalizeIPFSRepo(ipfsRepoPath, newRepoPath string) error {
 }
 
 // Migrate runs an IPFS fsrepo migration
-func Migrate(ctx context.Context) error {
+func Migrate(ctx context.Context, ipfsDir string) error {
 	const httpUserAgent = "go-ipfs"
 
 	fetchDistPath := migrate.GetDistPathEnv(migrate.CurrentIpfsDist)
 	f := migrate.NewHttpFetcher(fetchDistPath, "", httpUserAgent, 0)
-	err := migrate.RunMigration(ctx, f, fsrepo.RepoVersion, "", false)
+	err := migrate.RunMigration(ctx, f, fsrepo.RepoVersion, ipfsDir, false)
 	if err != nil {
 		fmt.Println("The migrations of fs-repo failed:")
 		fmt.Printf("  %s\n", err)
