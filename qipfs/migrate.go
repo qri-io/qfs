@@ -57,8 +57,7 @@ func InternalizeIPFSRepo(ipfsRepoPath, newRepoPath string) error {
 	}
 
 	// migrate the copied ipfs repo
-	os.Setenv("IPFS_PATH", tmpDir)
-	if err := Migrate(context.Background(), ""); err != nil {
+	if err := Migrate(context.Background(), tmpDir); err != nil {
 		return fmt.Errorf("error migrating ipfs repo: %w", err)
 	}
 
