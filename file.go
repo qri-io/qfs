@@ -14,9 +14,9 @@ import (
 
 var (
 	// ErrNotDirectory is the result of attempting to perform "directory-like" operations on a file
-	ErrNotDirectory = errors.New("This file is not a directory")
+	ErrNotDirectory = errors.New("file is not a directory")
 	// ErrNotFile is the result of attempting to perform "file like" operations on a directory
-	ErrNotFile = errors.New("This is a directory")
+	ErrNotFile = errors.New("file is a directory")
 )
 
 // File is an interface that provides functionality for handling

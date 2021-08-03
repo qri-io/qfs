@@ -47,7 +47,7 @@ func (m *Mux) SetFilesystem(fs qfs.Filesystem) error {
 		}(releaser)
 	}
 	if m.defaultWriteDestination == "" {
-		if _, ok := fs.(qfs.AddingFS); ok {
+		if _, ok := fs.(qfs.MerkleDagStore); ok {
 			m.defaultWriteDestination = fs.Type()
 		}
 	}

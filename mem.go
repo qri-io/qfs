@@ -6,11 +6,16 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"io/ioutil"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/ipfs/go-cid"
+	format "github.com/ipfs/go-ipld-format"
+	merkledag "github.com/ipfs/go-merkledag"
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-multihash"
 )
@@ -53,11 +58,11 @@ type MemFS struct {
 	Files   map[string]filer
 }
 
+// compile-time assertions
 var (
-	// compile-time assertion that MemFS satisfies the Filesystem interface
-	_ Filesystem = (*MemFS)(nil)
-	// assert MemFS implements the CAFS interface
-	_ CAFS = (*MemFS)(nil)
+	_ Filesystem     = (*MemFS)(nil)
+	_ CAFS           = (*MemFS)(nil)
+	_ MerkleDagStore = (*MemFS)(nil)
 )
 
 // MemFilestoreType uniquely identifies the mem filestore
@@ -188,22 +193,23 @@ func (m *MemFS) put(ctx context.Context, file File) (key string, err error) {
 func (m *MemFS) Get(ctx context.Context, key string) (File, error) {
 	// Check if the local MapStore has the file.
 	f, err := m.getLocal(key)
-	if err == nil {
-		return f, nil
-	} else if !errors.Is(err, ErrNotFound) {
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			// Check if the anyone connected on the mock Network has the file.
+			for _, connect := range m.Network {
+				f, err := connect.getLocal(key)
+				if err == nil {
+					return f, nil
+				} else if err != ErrNotFound {
+					return nil, err
+				}
+			}
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 
-	// Check if the anyone connected on the mock Network has the file.
-	for _, connect := range m.Network {
-		f, err := connect.getLocal(key)
-		if err == nil {
-			return f, nil
-		} else if err != ErrNotFound {
-			return nil, err
-		}
-	}
-	return nil, ErrNotFound
+	return f, nil
 }
 
 func (m *MemFS) getLocal(key string) (File, error) {
@@ -211,7 +217,7 @@ func (m *MemFS) getLocal(key string) (File, error) {
 	// key may be of the form /mem/QmFoo/file.json but MemFS indexes its maps
 	// using keys like /mem/QmFoo. Trim after the second part of the key.
 	parts := strings.Split(key, "/")
-	log.Debugf("MemFS getting key=%q parts=%q", key, parts)
+	log.Debugw("MemFS getting", "key", key, "parts", parts)
 
 	if len(parts) == 0 {
 		return nil, fmt.Errorf("key is required")
@@ -220,7 +226,7 @@ func (m *MemFS) getLocal(key string) (File, error) {
 	m.filesLk.Lock()
 	defer m.filesLk.Unlock()
 
-	log.Debugf("get hash=%q", parts[0])
+	log.Debugw("get", "hash", parts[0])
 	// Check if the local MemFS has the file
 	f := m.Files[parts[0]]
 	if f == nil {
@@ -274,6 +280,155 @@ func (m *MemFS) Delete(ctx context.Context, key string) error {
 	m.filesLk.Unlock()
 	return nil
 	// return m.walkRm(parts[0])
+}
+
+func (m *MemFS) GetNode(id cid.Cid, path ...string) (DagNode, error) {
+	m.filesLk.Lock()
+	defer m.filesLk.Unlock()
+
+	log.Debugw("get node", "cid", id.String(), "files", m.Files)
+	f, ok := m.Files[id.String()]
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	file, err := f.File()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := ioutil.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+
+	return &memDagNode{
+		id:   id,
+		size: int64(len(data)),
+		node: merkledag.NodeWithData(data),
+	}, nil
+}
+
+func (m *MemFS) PutNode(links Links) (PutResult, error) {
+	buf := bytes.NewBuffer(nil)
+	dir := fsDir{
+		fs:    m,
+		path:  "",
+		files: map[string]string{},
+	}
+
+	for _, ch := range links.SortedSlice() {
+		dir.files[ch.Name] = ch.Cid.String()
+		if _, err := buf.WriteString(ch.Cid.String() + "\n"); err != nil {
+			panic(err.Error())
+		}
+	}
+
+	mh, err := multihash.Sum(buf.Bytes(), multihash.SHA2_256, -1)
+	if err != nil {
+		return PutResult{}, err
+	}
+
+	id := cid.NewCidV0(mh)
+	m.Files[id.String()] = dir
+	return PutResult{
+		Cid:  id,
+		Size: int64(buf.Len()),
+	}, nil
+}
+
+func (m *MemFS) GetBlock(id cid.Cid) (io.Reader, error) {
+	m.filesLk.Lock()
+	defer m.filesLk.Unlock()
+	filer, ok := m.Files[id.String()]
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	return filer.File()
+}
+
+func (m *MemFS) PutBlock(d []byte) (id cid.Cid, err error) {
+	res, err := m.putBlock("", d)
+	return res.Cid, nil
+}
+
+func (m *MemFS) putBlock(name string, data []byte) (PutResult, error) {
+	m.filesLk.Lock()
+	defer m.filesLk.Unlock()
+
+	hash, err := multihash.Sum(data, multihash.SHA2_256, -1)
+	if err != nil {
+		return PutResult{}, err
+	}
+
+	id := cid.NewCidV0(hash)
+	m.Files[id.String()] = fsFile{
+		name: name,
+		path: "",
+		data: data,
+	}
+
+	return PutResult{
+		Cid:  id,
+		Size: int64(len(data)),
+	}, nil
+}
+
+func (m *MemFS) PutFile(f fs.File) (PutResult, error) {
+	stat, err := f.Stat()
+	if err != nil {
+		return PutResult{}, err
+	}
+
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		return PutResult{}, err
+	}
+	if err := f.Close(); err != nil {
+		return PutResult{}, err
+	}
+
+	return m.putBlock(stat.Name(), data)
+}
+
+func (m *MemFS) GetFile(root cid.Cid, path ...string) (io.ReadCloser, error) {
+	if len(path) > 0 {
+		return nil, fmt.Errorf("memfs does not support pathing beyond a root CID")
+	}
+
+	m.filesLk.Lock()
+	defer m.filesLk.Unlock()
+
+	f, ok := m.Files[root.String()]
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	return f.File()
+}
+
+type memDagNode struct {
+	id   cid.Cid
+	size int64
+	node format.Node
+}
+
+var _ DagNode = (*memDagNode)(nil)
+
+func (n memDagNode) Size() int64  { return n.size }
+func (n memDagNode) Cid() cid.Cid { return n.id }
+func (n memDagNode) Raw() []byte  { return n.node.RawData() }
+func (n memDagNode) Links() Links {
+	links := NewLinks()
+	for _, link := range n.node.Links() {
+		links.Add(Link{
+			Name: link.Name,
+			Cid:  link.Cid,
+			Size: int64(link.Size),
+		})
+	}
+	return links
 }
 
 func (m *MemFS) walkRm(hash string) error {
