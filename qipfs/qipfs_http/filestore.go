@@ -7,13 +7,13 @@ import (
 	"net/http"
 	"strings"
 
+	files "github.com/ipfs/go-ipfs-files"
 	logging "github.com/ipfs/go-log"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	path "github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/mitchellh/mapstructure"
 	httpapi "github.com/qri-io/go-ipfs-http-client"
 	qfs "github.com/qri-io/qfs"
-	files "github.com/qri-io/qfs/qipfs/go-ipfs-files"
 )
 
 var log = logging.Logger("cafs/ipfs_http")
@@ -90,7 +90,7 @@ func (fst *Filestore) Get(ctx context.Context, key string) (qfs.File, error) {
 }
 
 func (fst *Filestore) Put(ctx context.Context, file qfs.File) (string, error) {
-	resolvedPath, err := fst.capi.Unixfs().Add(ctx, wrapFile{file})
+	resolvedPath, err := fst.capi.Unixfs().Add(ctx, files.NewReaderFile(file))
 	if err != nil {
 		return "", fmt.Errorf("putting file in IPFS via HTTP: %q", err)
 	}
@@ -143,24 +143,4 @@ func (fst *Filestore) Pin(ctx context.Context, cid string, recursive bool) error
 
 func (fst *Filestore) Unpin(ctx context.Context, cid string, recursive bool) error {
 	return fst.capi.Pin().Rm(ctx, path.New(cid))
-}
-
-type wrapFile struct {
-	qfs.File
-}
-
-func (w wrapFile) NextFile() (files.File, error) {
-	next, err := w.File.NextFile()
-	if err != nil {
-		return nil, err
-	}
-	return wrapFile{next}, nil
-}
-
-func (w wrapFile) Seek(offset int64, whence int) (int64, error) {
-	return 0, fmt.Errorf("wrapFile doesn't support seeking")
-}
-
-func (w wrapFile) Size() (int64, error) {
-	return 0, fmt.Errorf("wrapFile doesn't support Size")
 }

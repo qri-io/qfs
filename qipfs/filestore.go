@@ -28,8 +28,6 @@ import (
 	"github.com/ipfs/interface-go-ipfs-core/path"
 	corepath "github.com/ipfs/interface-go-ipfs-core/path"
 	"github.com/qri-io/qfs"
-	"github.com/qri-io/qfs/qipfs/coreunix"
-	qfiles "github.com/qri-io/qfs/qipfs/go-ipfs-files"
 	qipfs_http "github.com/qri-io/qfs/qipfs/qipfs_http"
 )
 
@@ -51,6 +49,12 @@ type Filestore struct {
 	doneCh  chan struct{}
 	doneErr error
 }
+
+var (
+	_ qfs.Filesystem     = (*Filestore)(nil)
+	_ qfs.MerkleDagStore = (*Filestore)(nil)
+	_ qfs.CAFS           = (*Filestore)(nil)
+)
 
 // NewFilesystem creates a new local filesystem PathResolver
 // with no options
@@ -143,9 +147,9 @@ func NewFilesystemFromNode(ctx context.Context, node *core.IpfsNode) (qfs.Merkle
 }
 
 // Type distinguishes this filesystem from others by a unique string prefix
-func (fst Filestore) Type() string {
-	return FilestoreType
-}
+func (fst Filestore) Type() string { return FilestoreType }
+
+func (fst Filestore) IsContentAddressedFilesystem() {}
 
 func (fs *Filestore) GetNode(id cid.Cid, path ...string) (qfs.DagNode, error) {
 	if len(path) > 0 {
@@ -170,8 +174,6 @@ func (fs *Filestore) GetNode(id cid.Cid, path ...string) (qfs.DagNode, error) {
 
 func (fs *Filestore) PutNode(links qfs.Links) (qfs.PutResult, error) {
 	node := unixfs.EmptyDirNode()
-	// node := &merkledag.ProtoNode{}
-	// node.SetData(unixfs.FolderPBData())
 	node.SetCidBuilder(cid.V0Builder{})
 	for name, lnk := range links.Map() {
 		node.AddRawLink(name, lnk.IPLD())
@@ -329,10 +331,6 @@ func (fst *Filestore) getKey(ctx context.Context, key string) (qfs.File, error) 
 		return ipfsFile{path: key, r: rdr}, nil
 	}
 
-	// if _, isDir := node.(files.Directory); isDir {
-	// 	return nil, fmt.Errorf("filestore doesn't support getting directories")
-	// }
-
 	return nil, fmt.Errorf("path is neither a file nor a directory")
 }
 
@@ -471,76 +469,13 @@ func (fs *Filestore) serveAPI() error {
 
 // AddFile adds a file to the top level IPFS Node
 func (fst *Filestore) AddFile(file qfs.File, pin bool) (hash string, err error) {
-	node := fst.Node()
 	ctx := context.Background()
 
-	fileAdder, err := coreunix.NewAdder(ctx, node.Pinning, node.Blockstore, node.DAG)
-	fileAdder.Pin = pin
-	// fileAdder.Wrap = file.IsDirectory()
+	path, err := fst.capi.Unixfs().Add(ctx, files.NewReaderFile(file))
 	if err != nil {
-		err = fmt.Errorf("error allocating adder: %s", err.Error())
-		return
+		return "", err
 	}
-
-	// wrap in a folder if top level is a file
-	if !file.IsDirectory() {
-		file = qfs.NewMemdir("/", file)
-	}
-
-	errChan := make(chan error, 0)
-	outChan := make(chan interface{}, 9)
-
-	fileAdder.Out = outChan
-
-	go func() {
-		defer close(outChan)
-		for {
-			file, err := file.NextFile()
-			if err == io.EOF {
-				// Finished the list of files.
-				break
-			} else if err != nil {
-				errChan <- err
-				return
-			}
-			if err := fileAdder.AddFile(wrapFile{file}); err != nil {
-				errChan <- err
-				return
-			}
-		}
-		if _, err = fileAdder.Finalize(); err != nil {
-			errChan <- fmt.Errorf("error finalizing file adder: %s", err.Error())
-			return
-		}
-		errChan <- nil
-		// node, err := fileAdder.CurRootNode()
-		// if err != nil {
-		// 	errChan <- fmt.Errorf("error finding root node: %s", err.Error())
-		// 	return
-		// }
-		// if err = fileAdder.PinRoot(); err != nil {
-		// 	errChan <- fmt.Errorf("error pinning file root: %s", err.Error())
-		// 	return
-		// }
-		// errChan <- nil
-	}()
-
-	for {
-		select {
-		case out, ok := <-outChan:
-			if !ok {
-				return
-			}
-			output := out.(*coreunix.AddEvent)
-			if len(output.Hash) > 0 {
-				hash = output.Hash
-				// return
-			}
-		case err := <-errChan:
-			return hash, err
-		}
-
-	}
+	return path.Cid().String(), nil
 }
 
 func pathFromHash(hash string) string {
@@ -634,26 +569,6 @@ func cmdCtx(node *ipfs_core.IpfsNode, repoPath string) ipfs_commands.Context {
 			return node, nil
 		},
 	}
-}
-
-type wrapFile struct {
-	qfs.File
-}
-
-func (w wrapFile) NextFile() (qfiles.File, error) {
-	next, err := w.File.NextFile()
-	if err != nil {
-		return nil, err
-	}
-	return wrapFile{next}, nil
-}
-
-func (w wrapFile) Seek(offset int64, whence int) (int64, error) {
-	return 0, fmt.Errorf("wrapFile doesn't support seeking")
-}
-
-func (w wrapFile) Size() (int64, error) {
-	return 0, fmt.Errorf("wrapFile doesn't support Size")
 }
 
 // Node exposes the internal ipfs node

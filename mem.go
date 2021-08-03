@@ -20,19 +20,8 @@ import (
 	"github.com/multiformats/go-multihash"
 )
 
-// NewMemFilesystem allocates an instace of a mapstore that
-// can be used as a PathResolver
-// satisfies the FSConstructor interface
-func NewMemFilesystem(_ context.Context, cfg map[string]interface{}) (Filesystem, error) {
-	return NewMemFS(), nil
-}
-
-// NewMemFS allocates an instance of a mapstore
-func NewMemFS() *MemFS {
-	return &MemFS{
-		Files: make(map[string]filer),
-	}
-}
+// MemFilestoreType uniquely identifies the mem filestore
+const MemFilestoreType = "mem"
 
 // MemFS implements Filestore in-memory as a map
 //
@@ -65,8 +54,19 @@ var (
 	_ MerkleDagStore = (*MemFS)(nil)
 )
 
-// MemFilestoreType uniquely identifies the mem filestore
-const MemFilestoreType = "mem"
+// NewMemFilesystem allocates an instace of a mapstore that
+// can be used as a PathResolver
+// satisfies the FSConstructor interface
+func NewMemFilesystem(_ context.Context, cfg map[string]interface{}) (Filesystem, error) {
+	return NewMemFS(), nil
+}
+
+// NewMemFS allocates an instance of a mapstore
+func NewMemFS() *MemFS {
+	return &MemFS{
+		Files: make(map[string]filer),
+	}
+}
 
 // Type distinguishes this filesystem from others by a unique string prefix
 func (m *MemFS) Type() string {
@@ -350,6 +350,9 @@ func (m *MemFS) GetBlock(id cid.Cid) (io.Reader, error) {
 
 func (m *MemFS) PutBlock(d []byte) (id cid.Cid, err error) {
 	res, err := m.putBlock("", d)
+	if err != nil {
+		return cid.Cid{}, err
+	}
 	return res.Cid, nil
 }
 
@@ -477,110 +480,6 @@ func (m *MemFS) AddConnection(other *MemFS) {
 	if !found {
 		other.Network = append(other.Network, m)
 	}
-}
-
-type adder struct {
-	fs   *MemFS
-	pin  bool
-	out  chan AddedFile
-	root string
-	tree *nd
-}
-
-// NewAdder returns an Adder for the store
-func (m *MemFS) NewAdder(ctx context.Context, pin, wrap bool) (Adder, error) {
-	addedOut := make(chan AddedFile, 9)
-	return &adder{
-		fs:   m,
-		out:  addedOut,
-		tree: newNode(""),
-	}, nil
-}
-
-func (a *adder) addNode(f File) *nd {
-	path := f.FullPath()
-	path = strings.TrimPrefix(path, fmt.Sprintf("/%s/", MemFilestoreType))
-	path = strings.TrimPrefix(path, "/")
-
-	node := a.tree
-	if path == "" {
-		return node
-	}
-
-	for _, part := range strings.Split(path, "/") {
-		var ch *nd
-		for _, c := range node.children {
-			if c.name == part {
-				ch = c
-				break
-			}
-		}
-		if ch == nil {
-			ch = newNode(part)
-			node.children = append(node.children, ch)
-		}
-		node = ch
-	}
-	return node
-}
-
-func (a *adder) AddFile(ctx context.Context, f File) (err error) {
-	log.Debugf("Adder.AddFile FullPath=%s", f.FullPath())
-
-	node := a.addNode(f)
-	var hash string
-
-	if f.IsDirectory() {
-		var dir fsDir
-		hash, dir = node.toDir(a.fs)
-		if err != nil {
-			return err
-		}
-		log.Debugf("adding directory path=%s dir=%v", hash, dir.files)
-		a.fs.filesLk.Lock()
-		a.fs.Files[hash] = dir
-		a.fs.filesLk.Unlock()
-		node.hash = hash
-	} else {
-		hash, err = a.fs.put(ctx, f)
-		if err != nil {
-			err = fmt.Errorf("error putting file in mapstore: %s", err.Error())
-			return err
-		}
-		node.hash = hash
-	}
-
-	hash = fmt.Sprintf("/%s/%s", MemFilestoreType, hash)
-	log.Debugf("Adder AddedFile FullPath=%s hash=%s", f.FullPath(), hash)
-	a.root = hash
-	a.out <- AddedFile{
-		Path:  hash,
-		Name:  f.FullPath(),
-		Bytes: 0,
-		Hash:  hash,
-	}
-	return nil
-}
-
-func (a *adder) Added() chan AddedFile {
-	return a.out
-}
-
-func (a *adder) Finalize() (string, error) {
-	close(a.out)
-
-	log.Debugf("adding root directory")
-	root := NewMemdir("/")
-	node := a.addNode(root)
-	hash, dir := node.toDir(a.fs)
-	a.fs.filesLk.Lock()
-	a.fs.Files[hash] = dir
-	a.fs.filesLk.Unlock()
-
-	node.hash = hash
-
-	hash = fmt.Sprintf("/%s/%s", MemFilestoreType, hash)
-	return hash, nil
 }
 
 func hashBytes(data []byte) (hash string, err error) {

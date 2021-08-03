@@ -11,6 +11,9 @@ import (
 	"github.com/qri-io/qfs/qipfs"
 )
 
+// FilestoreType uniquely identifies the mux filestore
+const FilestoreType = "mux"
+
 // Mux multiplexes together multiple filesystems using path multiplexing.
 // It's a way to use multiple filesystem implementations as a single FS
 type Mux struct {
@@ -27,6 +30,39 @@ type Mux struct {
 
 // compile-time assertion that MapStore satisfies the Filesystem interface
 var _ qfs.Filesystem = (*Mux)(nil)
+
+// New creates a new Mux Filesystem, if no Option funcs are provided,
+// New uses a default set of Option funcs. Any Option functions passed to this
+// function must check whether their fields are nil or not.
+// The first configured filesystem that implements the qfs.AddingFS interface
+// becomes the default filesystem returned by DefaultWriteFS
+func New(ctx context.Context, cfgs []qfs.Config) (*Mux, error) {
+	mux := &Mux{
+		handlers: map[string]qfs.Filesystem{},
+		doneCh:   make(chan struct{}),
+	}
+	for _, cfg := range cfgs {
+		constructor, ok := constructors[cfg.Type]
+		if !ok {
+			return nil, fmt.Errorf("unrecognized filesystem type: %q", cfg.Type)
+		}
+		fs, err := constructor(ctx, cfg.Config)
+		if err != nil {
+			return nil, fmt.Errorf("constructing %q filesystem: %w", cfg.Type, err)
+		}
+
+		if err := mux.SetFilesystem(fs); err != nil {
+			return nil, err
+		}
+	}
+
+	go func() {
+		mux.doneWg.Wait()
+		close(mux.doneCh)
+	}()
+
+	return mux, nil
+}
 
 // SetFilesystem designates the resolver for a given path kind string
 func (m *Mux) SetFilesystem(fs qfs.Filesystem) error {
@@ -80,46 +116,8 @@ var constructors = map[string]qfs.Constructor{
 	qfs.MemFilestoreType:  qfs.NewMemFilesystem,
 }
 
-// New creates a new Mux Filesystem, if no Option funcs are provided,
-// New uses a default set of Option funcs. Any Option functions passed to this
-// function must check whether their fields are nil or not.
-// The first configured filesystem that implements the qfs.AddingFS interface
-// becomes the default filesystem returned by DefaultWriteFS
-func New(ctx context.Context, cfgs []qfs.Config) (*Mux, error) {
-	mux := &Mux{
-		handlers: map[string]qfs.Filesystem{},
-		doneCh:   make(chan struct{}),
-	}
-	for _, cfg := range cfgs {
-		constructor, ok := constructors[cfg.Type]
-		if !ok {
-			return nil, fmt.Errorf("unrecognized filesystem type: %q", cfg.Type)
-		}
-		fs, err := constructor(ctx, cfg.Config)
-		if err != nil {
-			return nil, fmt.Errorf("constructing %q filesystem: %w", cfg.Type, err)
-		}
-
-		if err := mux.SetFilesystem(fs); err != nil {
-			return nil, err
-		}
-	}
-
-	go func() {
-		mux.doneWg.Wait()
-		close(mux.doneCh)
-	}()
-
-	return mux, nil
-}
-
-// FilestoreType uniquely identifies the mux filestore
-const FilestoreType = "mux"
-
 // Type distinguishes this filesystem from others by a unique string prefix
-func (m *Mux) Type() string {
-	return FilestoreType
-}
+func (m *Mux) Type() string { return FilestoreType }
 
 // DoneErr will return any error value after the done channel is closed
 func (m *Mux) DoneErr() error {
