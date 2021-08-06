@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/qri-io/qfs"
-	"github.com/qri-io/qfs/qipfs/qipfs_http"
 )
 
 func TestFS(t *testing.T) {
@@ -82,8 +81,8 @@ func TestCreatedWithAPIAddrFS(t *testing.T) {
 	if err != nil {
 		t.Errorf("error creating ipfs_http filesystem: %s", err)
 	}
-	if _, ok := cafs.(*qipfs_http.Filestore); !ok {
-		t.Errorf("returned filesystem is not of expected type `ipfs_http`")
+	if !cafs.(*Filestore).UsingHTTPBacking() {
+		t.Errorf("returned filesystem should be using HTTP backing")
 	}
 }
 

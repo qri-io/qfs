@@ -11,6 +11,9 @@ import (
 	"github.com/qri-io/qfs/qipfs"
 )
 
+// FilestoreType uniquely identifies the mux filestore
+const FilestoreType = "mux"
+
 // Mux multiplexes together multiple filesystems using path multiplexing.
 // It's a way to use multiple filesystem implementations as a single FS
 type Mux struct {
@@ -27,58 +30,6 @@ type Mux struct {
 
 // compile-time assertion that MapStore satisfies the Filesystem interface
 var _ qfs.Filesystem = (*Mux)(nil)
-
-// SetFilesystem designates the resolver for a given path kind string
-func (m *Mux) SetFilesystem(fs qfs.Filesystem) error {
-	if m.handlers == nil {
-		m.handlers = map[string]qfs.Filesystem{}
-	}
-
-	if m.handlers[fs.Type()] != nil {
-		return fmt.Errorf("mux already has a %q filesystem", fs.Type())
-	}
-
-	if releaser, ok := fs.(qfs.ReleasingFilesystem); ok {
-		m.doneWg.Add(1)
-		go func(releaser qfs.ReleasingFilesystem) {
-			<-releaser.Done()
-			m.doneErr = releaser.DoneErr()
-			m.doneWg.Done()
-		}(releaser)
-	}
-	if m.defaultWriteDestination == "" {
-		if _, ok := fs.(qfs.AddingFS); ok {
-			m.defaultWriteDestination = fs.Type()
-		}
-	}
-
-	m.handlers[fs.Type()] = fs
-	return nil
-}
-
-// Filesystem returns the filesystem for a given fs type string, nil if no
-// filesystem for fsType exists
-func (m *Mux) Filesystem(fsType string) qfs.Filesystem {
-	return m.handlers[fsType]
-}
-
-// KnownFSTypes gives the set of filesystems known to muxfs.New
-func KnownFSTypes() []string {
-	return []string{
-		httpfs.FilestoreType,
-		qipfs.FilestoreType,
-		localfs.FilestoreType,
-		qfs.MemFilestoreType,
-	}
-}
-
-// constructors maps filesystem type strings to constructor functions
-var constructors = map[string]qfs.Constructor{
-	httpfs.FilestoreType:  httpfs.NewFilesystem,
-	qipfs.FilestoreType:   qipfs.NewFilesystem,
-	localfs.FilestoreType: localfs.NewFilesystem,
-	qfs.MemFilestoreType:  qfs.NewMemFilesystem,
-}
 
 // New creates a new Mux Filesystem, if no Option funcs are provided,
 // New uses a default set of Option funcs. Any Option functions passed to this
@@ -113,13 +64,60 @@ func New(ctx context.Context, cfgs []qfs.Config) (*Mux, error) {
 	return mux, nil
 }
 
-// FilestoreType uniquely identifies the mux filestore
-const FilestoreType = "mux"
+// SetFilesystem designates the resolver for a given path kind string
+func (m *Mux) SetFilesystem(fs qfs.Filesystem) error {
+	if m.handlers == nil {
+		m.handlers = map[string]qfs.Filesystem{}
+	}
+
+	if m.handlers[fs.Type()] != nil {
+		return fmt.Errorf("mux already has a %q filesystem", fs.Type())
+	}
+
+	if releaser, ok := fs.(qfs.ReleasingFilesystem); ok {
+		m.doneWg.Add(1)
+		go func(releaser qfs.ReleasingFilesystem) {
+			<-releaser.Done()
+			m.doneErr = releaser.DoneErr()
+			m.doneWg.Done()
+		}(releaser)
+	}
+	if m.defaultWriteDestination == "" {
+		if _, ok := fs.(qfs.MerkleDagStore); ok {
+			m.defaultWriteDestination = fs.Type()
+		}
+	}
+
+	m.handlers[fs.Type()] = fs
+	return nil
+}
+
+// Filesystem returns the filesystem for a given fs type string, nil if no
+// filesystem for fsType exists
+func (m *Mux) Filesystem(fsType string) qfs.Filesystem {
+	return m.handlers[fsType]
+}
+
+// KnownFSTypes gives the set of filesystems known to muxfs.New
+func KnownFSTypes() []string {
+	return []string{
+		httpfs.FilestoreType,
+		qipfs.FilestoreType,
+		localfs.FilestoreType,
+		qfs.MemFilestoreType,
+	}
+}
+
+// constructors maps filesystem type strings to constructor functions
+var constructors = map[string]qfs.Constructor{
+	httpfs.FilestoreType:  httpfs.NewFilesystem,
+	qipfs.FilestoreType:   qipfs.NewFilesystem,
+	localfs.FilestoreType: localfs.NewFilesystem,
+	qfs.MemFilestoreType:  qfs.NewMemFilesystem,
+}
 
 // Type distinguishes this filesystem from others by a unique string prefix
-func (m *Mux) Type() string {
-	return FilestoreType
-}
+func (m *Mux) Type() string { return FilestoreType }
 
 // DoneErr will return any error value after the done channel is closed
 func (m *Mux) DoneErr() error {

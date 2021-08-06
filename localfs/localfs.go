@@ -13,6 +13,9 @@ import (
 	"github.com/qri-io/qfs"
 )
 
+// FilestoreType uniquely identifies this filestore
+const FilestoreType = "local"
+
 // FSConfig adjusts the behaviour of an FS instance
 type FSConfig struct {
 	PWD string // working directory. defaults to system root
@@ -48,6 +51,14 @@ func mapToConfig(cfgMap map[string]interface{}) (*FSConfig, error) {
 	return cfg, nil
 }
 
+// FS is a implementation of qfs.PathResolver that uses the local filesystem
+type FS struct {
+	cfg *FSConfig
+}
+
+// compile-time assertion that MapStore satisfies the Filesystem interface
+var _ qfs.Filesystem = (*FS)(nil)
+
 // NewFilesystem creates a new local filesystem Pathresolver
 // with no options
 func NewFilesystem(_ context.Context, cfgMap map[string]interface{}) (qfs.Filesystem, error) {
@@ -67,17 +78,6 @@ func NewFS(cfgMap map[string]interface{}, opts ...Option) (qfs.Filesystem, error
 
 	return &FS{cfg: cfg}, nil
 }
-
-// FS is a implementation of qfs.PathResolver that uses the local filesystem
-type FS struct {
-	cfg *FSConfig
-}
-
-// compile-time assertion that MapStore satisfies the Filesystem interface
-var _ qfs.Filesystem = (*FS)(nil)
-
-// FilestoreType uniquely identifies this filestore
-const FilestoreType = "local"
 
 // Type distinguishes this filesystem from others by a unique string prefix
 func (lfs *FS) Type() string {

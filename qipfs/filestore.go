@@ -1,55 +1,56 @@
 package qipfs
 
 import (
+	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"net/http"
 	"path/filepath"
-	"strings"
 	"time"
 
-	// Note coreunix is forked form github.com/ipfs/go-ipfs/core/coreunix
-	// we need coreunix.Adder.addFile to be exported to get access to dags while
-	// they're being created. We should be able to remove this with refactoring &
-	// moving toward coreapi.coreUnix().Add() with properly-configured options,
-	// but I'd like a test before we do that. We may also want to consider switching
-	// Qri to writing IPLD. Lots to think about.
-	coreunix "github.com/qri-io/qfs/qipfs/coreunix"
-
 	"github.com/ipfs/go-cid"
+	ipfs_config "github.com/ipfs/go-ipfs-config"
+	files "github.com/ipfs/go-ipfs-files"
+	ipfs_commands "github.com/ipfs/go-ipfs/commands"
 	core "github.com/ipfs/go-ipfs/core"
 	coreapi "github.com/ipfs/go-ipfs/core/coreapi"
+	ipfs_corehttp "github.com/ipfs/go-ipfs/core/corehttp"
 	ipfsrepo "github.com/ipfs/go-ipfs/repo"
 	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
+	format "github.com/ipfs/go-ipld-format"
 	logging "github.com/ipfs/go-log"
+	unixfs "github.com/ipfs/go-unixfs"
 	coreiface "github.com/ipfs/interface-go-ipfs-core"
 	caopts "github.com/ipfs/interface-go-ipfs-core/options"
 	"github.com/ipfs/interface-go-ipfs-core/path"
+	corepath "github.com/ipfs/interface-go-ipfs-core/path"
+	httpapi "github.com/qri-io/go-ipfs-http-client"
 	"github.com/qri-io/qfs"
-	files "github.com/qri-io/qfs/qipfs/go-ipfs-files"
-	"github.com/qri-io/qfs/qipfs/qipfs_http"
 )
 
-var (
-	log = logging.Logger("qipfs")
-	// ErrNoRepoPath is returned when no repo path is provided in the config
-	ErrNoRepoPath = errors.New("must provide a repo path ('path') to initialize an ipfs filesystem")
-)
+// FilestoreType uniquely identifies this filestore
+const FilestoreType = "ipfs"
+
+var log = logging.Logger("qipfs")
 
 type Filestore struct {
-	cfg  *StoreCfg
-	node *core.IpfsNode
-	capi coreiface.CoreAPI
+	ctx context.Context
+	cfg *StoreCfg
+
+	node       *core.IpfsNode
+	capi       coreiface.CoreAPI
+	httpClient *http.Client
 
 	doneCh  chan struct{}
 	doneErr error
 }
 
 var (
-	_ qfs.ReleasingFilesystem = (*Filestore)(nil)
-	_ qfs.AddingFS            = (*Filestore)(nil)
-	_ qfs.CAFS                = (*Filestore)(nil)
+	_ qfs.Filesystem     = (*Filestore)(nil)
+	_ qfs.MerkleDagStore = (*Filestore)(nil)
+	_ qfs.CAFS           = (*Filestore)(nil)
 )
 
 // NewFilesystem creates a new local filesystem PathResolver
@@ -60,15 +61,8 @@ func NewFilesystem(ctx context.Context, cfgMap map[string]interface{}) (qfs.File
 		return nil, err
 	}
 
-	if cfg.BuildCfg.ExtraOpts == nil {
-		cfg.BuildCfg.ExtraOpts = map[string]bool{}
-	}
-	cfg.BuildCfg.ExtraOpts["pubsub"] = cfg.EnablePubSub
-
-	if cfg.Path == "" && cfg.URL == "" {
-		return nil, ErrNoRepoPath
-	} else if cfg.URL != "" {
-		return qipfs_http.NewFilesystem(map[string]interface{}{"url": cfg.URL})
+	if cfg.Path == "" && cfg.URL != "" {
+		return newHTTPAddrFilesystem(ctx, cfg)
 	}
 
 	if err := LoadIPFSPluginsOnce(cfg.Path); err != nil {
@@ -79,8 +73,8 @@ func NewFilesystem(ctx context.Context, cfgMap map[string]interface{}) (qfs.File
 	if err != nil {
 		if cfg.URL != "" && err == errRepoLock {
 			// if we cannot get a repo, and we have a fallback APIAdder
-			// attempt to create and return an `qipfs_http` filesystem istead
-			return qipfs_http.NewFilesystem(map[string]interface{}{"url": cfg.URL})
+			// attempt to create and return an http-backed filesystem istead
+			return newHTTPAddrFilesystem(ctx, cfg)
 		}
 		log.Errorf("opening %q: %s", cfg.Path, err)
 		return nil, err
@@ -113,45 +107,144 @@ func NewFilesystem(ctx context.Context, cfgMap map[string]interface{}) (qfs.File
 	}
 
 	fst := &Filestore{
+		ctx:    ctx,
 		cfg:    cfg,
 		node:   node,
 		capi:   capi,
 		doneCh: make(chan struct{}),
 	}
 
-	go fst.handleContextClose(ctx)
+	go fst.handleContextClose()
+	return fst, nil
+}
 
+func newHTTPAddrFilesystem(ctx context.Context, cfg *StoreCfg) (qfs.Filesystem, error) {
+	client := http.DefaultClient
+	cli, err := httpapi.NewURLApiWithClient(cfg.URL, client)
+	if err != nil {
+		return nil, err
+	}
+
+	fst := &Filestore{
+		ctx:        ctx,
+		cfg:        cfg,
+		httpClient: client,
+
+		capi:   cli,
+		doneCh: make(chan struct{}),
+	}
+
+	go fst.handleContextClose()
 	return fst, nil
 }
 
 // NewFilesystemFromNode wraps an existing IPFS node with a qfs.Filesystem
-func NewFilesystemFromNode(ctx context.Context, node *core.IpfsNode) (qfs.Filesystem, error) {
+func NewFilesystemFromNode(ctx context.Context, node *core.IpfsNode) (qfs.MerkleDagStore, error) {
 	capi, err := coreapi.NewCoreAPI(node)
 	if err != nil {
 		return nil, err
 	}
 
 	fst := &Filestore{
+		ctx:    ctx,
 		node:   node,
 		capi:   capi,
 		doneCh: make(chan struct{}),
 	}
 
-	go fst.handleContextClose(ctx)
-
+	go fst.handleContextClose()
 	return fst, nil
 }
 
-// FilestoreType uniquely identifies this filestore
-const FilestoreType = "ipfs"
-
 // Type distinguishes this filesystem from others by a unique string prefix
-func (fst Filestore) Type() string {
-	return FilestoreType
+func (fst Filestore) Type() string { return FilestoreType }
+
+func (fst Filestore) IsContentAddressedFilesystem() {}
+
+func (fs *Filestore) GetNode(id cid.Cid, path ...string) (qfs.DagNode, error) {
+	if len(path) > 0 {
+		return nil, fmt.Errorf("unsupported: path values on ipfs.Filestore.GetNode")
+	}
+	node, err := fs.capi.Dag().Get(fs.ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	size, err := node.Size()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ipfsDagNode{
+		id:   id,
+		size: int64(size),
+		node: node,
+	}, nil
 }
 
-// IsContentAddressedFilesystem declares qipfs is content-addressed
-func (fst Filestore) IsContentAddressedFilesystem() {}
+func (fs *Filestore) PutNode(links qfs.Links) (qfs.PutResult, error) {
+	node := unixfs.EmptyDirNode()
+	node.SetCidBuilder(cid.V0Builder{})
+	for name, lnk := range links.Map() {
+		node.AddRawLink(name, lnk.IPLD())
+	}
+	err := fs.capi.Dag().Add(fs.ctx, node)
+	if err != nil {
+		return qfs.PutResult{}, err
+	}
+	size, err := node.Size()
+	if err != nil {
+		return qfs.PutResult{}, err
+	}
+
+	return qfs.PutResult{
+		Cid:  node.Cid(),
+		Size: int64(size),
+	}, err
+}
+
+func (fs *Filestore) GetBlock(id cid.Cid) (io.Reader, error) {
+	return fs.capi.Block().Get(fs.ctx, corepath.IpfsPath(id))
+}
+
+func (fs *Filestore) PutBlock(d []byte) (id cid.Cid, err error) {
+	bs, err := fs.capi.Block().Put(fs.ctx, bytes.NewBuffer(d), caopts.Block.Format("raw"))
+	if err != nil {
+		return cid.Cid{}, err
+	}
+	return bs.Path().Root(), nil
+}
+
+func (fs *Filestore) PutFile(f fs.File) (qfs.PutResult, error) {
+	path, err := fs.capi.Unixfs().Add(fs.ctx, files.NewReaderFile(f), caopts.Unixfs.CidVersion(0))
+	if err != nil {
+		return qfs.PutResult{}, err
+	}
+
+	storedFile, err := fs.capi.Unixfs().Get(fs.ctx, path)
+	if err != nil {
+		return qfs.PutResult{}, err
+	}
+
+	size, err := storedFile.Size()
+	if err != nil {
+		return qfs.PutResult{}, err
+	}
+
+	return qfs.PutResult{
+		Cid:  path.Root(),
+		Size: size,
+	}, nil
+}
+
+func (fs *Filestore) GetFile(root cid.Cid, path ...string) (io.ReadCloser, error) {
+	nd, err := fs.capi.Unixfs().Get(fs.ctx, corepath.IpfsPath(root))
+	if err != nil {
+		return nil, err
+	}
+	// TODO(b5) - assertion check
+	return nd.(io.ReadCloser), nil
+}
 
 // Done implements the qfs.ReleasingFilesystem interface
 func (fst *Filestore) Done() <-chan struct{} {
@@ -163,56 +256,31 @@ func (fst *Filestore) DoneErr() error {
 	return fst.doneErr
 }
 
-// Node exposes the internal ipfs node
-//
-// Deprecated: use IPFSCoreAPI instead
-func (fst *Filestore) Node() *core.IpfsNode {
-	return fst.node
-}
-
-// IPFSCoreAPI exposes the Filestore's CoreAPI interface
-func (fst *Filestore) IPFSCoreAPI() coreiface.CoreAPI {
+// CoreAPI exposes the Filestore's CoreAPI interface
+func (fst *Filestore) CoreAPI() coreiface.CoreAPI {
 	return fst.capi
 }
 
-func openRepo(ctx context.Context, cfg *StoreCfg) (ipfsrepo.Repo, error) {
-	if cfg.NilRepo {
-		return nil, nil
-	}
-	if cfg.Repo != nil {
-		return nil, nil
-	}
-	if cfg.Path != "" {
-		log.Debugf("opening repo at %q", cfg.Path)
-		if daemonLocked, err := fsrepo.LockedByOtherProcess(cfg.Path); err != nil {
-			return nil, err
-		} else if daemonLocked {
-			return nil, errRepoLock
-		}
-		localRepo, err := fsrepo.Open(cfg.Path)
-		if err != nil {
-			if err == fsrepo.ErrNeedMigration {
-				return nil, ErrNeedMigration
-			}
-			return nil, fmt.Errorf("error opening local filestore ipfs repository: %w", err)
-		}
-
-		return localRepo, nil
-	}
-	return nil, fmt.Errorf("no repo path to open IPFS fsrepo")
-}
-
 func (fst *Filestore) Online() bool {
+	if fst.UsingHTTPBacking() {
+		// TODO(b5): ping server?
+		return true
+	}
 	return fst.node.IsOnline
 }
 
 func (fst *Filestore) GoOnline(ctx context.Context) error {
+	if fst.UsingHTTPBacking() {
+		// already "online" if we're connected over HTTP
+		return nil
+	}
+
 	log.Debug("going online")
 	cfg := fst.cfg
 	cfg.BuildCfg.Online = true
 	node, err := core.NewNode(ctx, &cfg.BuildCfg)
 	if err != nil {
-		return fmt.Errorf("error creating ipfs node: %s\n", err.Error())
+		return fmt.Errorf("error creating ipfs node: %w", err)
 	}
 
 	capi, err := coreapi.NewCoreAPI(node)
@@ -232,7 +300,7 @@ func (fst *Filestore) GoOnline(ctx context.Context) error {
 	if cfg.EnableAPI {
 		go func() {
 			if err := fst.serveAPI(); err != nil {
-				log.Errorf("error serving IPFS HTTP api: %s", err)
+				log.Errorf("error serving IPFS HTTP api: %w", err)
 			}
 		}()
 	}
@@ -245,7 +313,17 @@ func (fst *Filestore) Has(ctx context.Context, key string) (exists bool, err err
 	if err != nil {
 		return false, err
 	}
-	return fst.node.Blockstore.Has(id)
+	if fst.node != nil {
+		return fst.node.Blockstore.Has(id)
+	}
+
+	// fall back to offline checking
+	offline, err := fst.capi.WithOptions(caopts.Api.Offline(true))
+	if err != nil {
+		return false, err
+	}
+	st, _ := offline.Block().Stat(ctx, path.New(key))
+	return st != nil, nil
 }
 
 func (fst *Filestore) Get(ctx context.Context, key string) (qfs.File, error) {
@@ -256,7 +334,7 @@ func (fst *Filestore) Get(ctx context.Context, key string) (qfs.File, error) {
 func (fst *Filestore) Put(ctx context.Context, file qfs.File) (key string, err error) {
 	hash, err := fst.AddFile(file, true)
 	if err != nil {
-		log.Infof("error adding bytes: %s", err.Error())
+		log.Infof("error adding bytes: %w", err)
 		return
 	}
 	return pathFromHash(hash), nil
@@ -282,176 +360,7 @@ func (fst *Filestore) getKey(ctx context.Context, key string) (qfs.File, error) 
 		return ipfsFile{path: key, r: rdr}, nil
 	}
 
-	// if _, isDir := node.(files.Directory); isDir {
-	// 	return nil, fmt.Errorf("filestore doesn't support getting directories")
-	// }
-
 	return nil, fmt.Errorf("path is neither a file nor a directory")
-}
-
-// Adder wraps a coreunix adder to implement AddingFS
-type Adder struct {
-	adder *coreunix.Adder
-	out   chan interface{}
-	added chan qfs.AddedFile
-	wrap  bool
-	pin   bool
-}
-
-func (a *Adder) AddFile(ctx context.Context, f qfs.File) error {
-	log.Debugf("Adder.AddFile FullPath=%s", f.FullPath())
-	return a.adder.AddFile(wrapFile{f})
-}
-
-func (a *Adder) Added() chan qfs.AddedFile {
-	return a.added
-}
-
-func (a *Adder) Finalize() (string, error) {
-	defer close(a.out)
-
-	root, err := a.adder.Finalize()
-	if err != nil {
-		return "", err
-	}
-
-	if a.pin {
-		if err := a.adder.PinRoot(); err != nil {
-			return "", err
-		}
-	}
-
-	return "/ipfs/" + root.Cid().String(), nil
-}
-
-func (fst *Filestore) NewAdder(ctx context.Context, pin, wrap bool) (qfs.Adder, error) {
-	node := fst.node
-
-	a, err := coreunix.NewAdder(ctx, node.Pinning, node.Blockstore, node.DAG)
-	if err != nil {
-		return nil, fmt.Errorf("error allocating adder: %s", err.Error())
-	}
-
-	outChan := make(chan interface{}, 100)
-	added := make(chan qfs.AddedFile, 100)
-	a.Out = outChan
-	a.Pin = pin
-	a.Wrap = wrap
-
-	go func() {
-		for {
-			select {
-			case out, ok := <-outChan:
-				if ok {
-					output := out.(*coreunix.AddEvent)
-					if !strings.HasPrefix(output.Name, "/") {
-						output.Name = fmt.Sprintf("/%s", output.Name)
-					}
-					if output.Hash != "" {
-						log.Debugf("file added %#v", output)
-						added <- qfs.AddedFile{
-							Path:  pathFromHash(output.Hash),
-							Name:  output.Name,
-							Bytes: output.Bytes,
-							Size:  output.Size,
-						}
-					}
-				} else {
-					close(added)
-					return
-				}
-			case <-ctx.Done():
-				close(added)
-				return
-			}
-		}
-	}()
-
-	return &Adder{
-		adder: a,
-		out:   outChan,
-		added: added,
-		wrap:  wrap,
-		pin:   pin,
-	}, nil
-}
-
-func pathFromHash(hash string) string {
-	return fmt.Sprintf("/%s/%s", FilestoreType, hash)
-}
-
-// AddFile adds a file to the top level IPFS Node
-func (fst *Filestore) AddFile(file qfs.File, pin bool) (hash string, err error) {
-	node := fst.Node()
-	ctx := context.Background()
-
-	fileAdder, err := coreunix.NewAdder(ctx, node.Pinning, node.Blockstore, node.DAG)
-	fileAdder.Pin = pin
-	// fileAdder.Wrap = file.IsDirectory()
-	if err != nil {
-		err = fmt.Errorf("error allocating adder: %s", err.Error())
-		return
-	}
-
-	// wrap in a folder if top level is a file
-	if !file.IsDirectory() {
-		file = qfs.NewMemdir("/", file)
-	}
-
-	errChan := make(chan error, 0)
-	outChan := make(chan interface{}, 9)
-
-	fileAdder.Out = outChan
-
-	go func() {
-		defer close(outChan)
-		for {
-			file, err := file.NextFile()
-			if err == io.EOF {
-				// Finished the list of files.
-				break
-			} else if err != nil {
-				errChan <- err
-				return
-			}
-			if err := fileAdder.AddFile(wrapFile{file}); err != nil {
-				errChan <- err
-				return
-			}
-		}
-		if _, err = fileAdder.Finalize(); err != nil {
-			errChan <- fmt.Errorf("error finalizing file adder: %s", err.Error())
-			return
-		}
-		errChan <- nil
-		// node, err := fileAdder.CurRootNode()
-		// if err != nil {
-		// 	errChan <- fmt.Errorf("error finding root node: %s", err.Error())
-		// 	return
-		// }
-		// if err = fileAdder.PinRoot(); err != nil {
-		// 	errChan <- fmt.Errorf("error pinning file root: %s", err.Error())
-		// 	return
-		// }
-		// errChan <- nil
-	}()
-
-	for {
-		select {
-		case out, ok := <-outChan:
-			if !ok {
-				return
-			}
-			output := out.(*coreunix.AddEvent)
-			if len(output.Hash) > 0 {
-				hash = output.Hash
-				// return
-			}
-		case err := <-errChan:
-			return hash, err
-		}
-
-	}
 }
 
 func (fst *Filestore) Pin(ctx context.Context, cid string, recursive bool) error {
@@ -499,10 +408,16 @@ func (fst *Filestore) PinsetDifference(ctx context.Context, set map[string]struc
 	return resCh, nil
 }
 
-func (fst *Filestore) handleContextClose(ctx context.Context) {
-	<-ctx.Done()
-	fst.doneErr = ctx.Err()
+func (fst *Filestore) handleContextClose() {
+	<-fst.ctx.Done()
+	fst.doneErr = fst.ctx.Err()
 	log.Debugf("closing repo")
+
+	defer close(fst.doneCh)
+
+	if fst.UsingHTTPBacking() {
+		return
+	}
 
 	if err := fst.node.Repo.Close(); err != nil {
 		log.Error(err)
@@ -523,28 +438,110 @@ func (fst *Filestore) handleContextClose(ctx context.Context) {
 		}
 		log.Debugf("closed repo at %q", fsr.Path())
 	}
-
-	close(fst.doneCh)
 }
 
-type wrapFile struct {
-	qfs.File
+// UsingHTTPBacking returns true if the filestore is talking to IPFS over an
+// HTTP API address
+func (fs *Filestore) UsingHTTPBacking() bool {
+	return fs.httpClient != nil
 }
 
-func (w wrapFile) NextFile() (files.File, error) {
-	next, err := w.File.NextFile()
-	if err != nil {
-		return nil, err
+// serveAPI makes an IPFS node available over an HTTP api
+func (fs *Filestore) serveAPI() error {
+	if fs.node == nil {
+		return fmt.Errorf("in-process IPFS node is required to serve IPFS HTTP API")
 	}
-	return wrapFile{next}, nil
+
+	cfg := fs.cfg
+	addr := ""
+	if cfg.Repo != nil {
+		if ipfscfg, err := cfg.Repo.Config(); err == nil {
+			// TODO (b5): apparantly ipfs config supports multiple API multiaddrs?
+			// I dunno, for now just go with the most likely case of only assigning
+			// an address if one string is supplied
+			if len(ipfscfg.Addresses.API) == 1 {
+				addr = ipfscfg.Addresses.API[0]
+			}
+		}
+	}
+
+	opts := []ipfs_corehttp.ServeOption{
+		ipfs_corehttp.GatewayOption(true, "/ipfs", "/ipns"),
+		ipfs_corehttp.WebUIOption,
+		ipfs_corehttp.CommandsOption(cmdCtx(fs.node, cfg.Path)),
+	}
+
+	// TODO (b5): I've added this fmt.Println because the corehttp package includes a println
+	// call to the affect of "API server listening on [addr]", which will be confusing to our
+	// users. We should chat with the protocol folks about making that print statement mutable
+	// or configurable
+	fmt.Println("starting IPFS HTTP API:")
+	return ipfs_corehttp.ListenAndServe(fs.node, addr, opts...)
 }
 
-func (w wrapFile) Seek(offset int64, whence int) (int64, error) {
-	return 0, fmt.Errorf("wrapFile doesn't support seeking")
+// AddFile adds a file to the top level IPFS Node
+func (fst *Filestore) AddFile(file qfs.File, pin bool) (hash string, err error) {
+	ctx := context.Background()
+
+	path, err := fst.capi.Unixfs().Add(ctx, files.NewReaderFile(file), caopts.Unixfs.CidVersion(0))
+	if err != nil {
+		return "", err
+	}
+	return path.Cid().String(), nil
 }
 
-func (w wrapFile) Size() (int64, error) {
-	return 0, fmt.Errorf("wrapFile doesn't support Size")
+func openRepo(ctx context.Context, cfg *StoreCfg) (ipfsrepo.Repo, error) {
+	if cfg.NilRepo {
+		return nil, nil
+	}
+	if cfg.Repo != nil {
+		return nil, nil
+	}
+	if cfg.Path != "" {
+		log.Debugf("opening repo at %q", cfg.Path)
+		if daemonLocked, err := fsrepo.LockedByOtherProcess(cfg.Path); err != nil {
+			return nil, err
+		} else if daemonLocked {
+			return nil, errRepoLock
+		}
+		localRepo, err := fsrepo.Open(cfg.Path)
+		if err != nil {
+			if err == fsrepo.ErrNeedMigration {
+				return nil, ErrNeedMigration
+			}
+			return nil, fmt.Errorf("error opening local filestore ipfs repository: %w", err)
+		}
+
+		return localRepo, nil
+	}
+	return nil, fmt.Errorf("no repo path to open IPFS fsrepo")
+}
+
+func pathFromHash(hash string) string {
+	return fmt.Sprintf("/%s/%s", FilestoreType, hash)
+}
+
+type ipfsDagNode struct {
+	id   cid.Cid
+	size int64
+	node format.Node
+}
+
+var _ qfs.DagNode = (*ipfsDagNode)(nil)
+
+func (n ipfsDagNode) Size() int64  { return n.size }
+func (n ipfsDagNode) Cid() cid.Cid { return n.id }
+func (n ipfsDagNode) Raw() []byte  { return n.node.RawData() }
+func (n ipfsDagNode) Links() qfs.Links {
+	links := qfs.NewLinks()
+	for _, link := range n.node.Links() {
+		links.Add(qfs.Link{
+			Name: link.Name,
+			Cid:  link.Cid,
+			Size: int64(link.Size),
+		})
+	}
+	return links
 }
 
 type ipfsFile struct {
@@ -595,4 +592,27 @@ func (f ipfsFile) MediaType() string {
 // and will always have a ModTime of zero
 func (f ipfsFile) ModTime() time.Time {
 	return time.Time{}
+}
+
+// extracted from github.com/ipfs/go-ipfs/cmd/ipfswatch/main.go
+func cmdCtx(node *core.IpfsNode, repoPath string) ipfs_commands.Context {
+	return ipfs_commands.Context{
+		// Online:     true,
+
+		ConfigRoot: repoPath,
+		ReqLog:     &ipfs_commands.ReqLog{},
+		LoadConfig: func(path string) (*ipfs_config.Config, error) {
+			return node.Repo.Config()
+		},
+		ConstructNode: func() (*core.IpfsNode, error) {
+			return node, nil
+		},
+	}
+}
+
+// Node exposes the internal ipfs node
+//
+// Deprecated: use IPFSCoreAPI instead
+func (fst *Filestore) Node() *core.IpfsNode {
+	return fst.node
 }
