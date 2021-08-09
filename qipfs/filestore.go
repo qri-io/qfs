@@ -269,7 +269,7 @@ func (fst *Filestore) Online() bool {
 	return fst.node.IsOnline
 }
 
-func (fst *Filestore) GoOnline(ctx context.Context) error {
+func (fst *Filestore) GoOnline() error {
 	if fst.UsingHTTPBacking() {
 		// already "online" if we're connected over HTTP
 		return nil
@@ -278,7 +278,7 @@ func (fst *Filestore) GoOnline(ctx context.Context) error {
 	log.Debug("going online")
 	cfg := fst.cfg
 	cfg.BuildCfg.Online = true
-	node, err := core.NewNode(ctx, &cfg.BuildCfg)
+	node, err := core.NewNode(fst.ctx, &cfg.BuildCfg)
 	if err != nil {
 		return fmt.Errorf("error creating ipfs node: %w", err)
 	}
@@ -289,6 +289,7 @@ func (fst *Filestore) GoOnline(ctx context.Context) error {
 	}
 
 	*fst = Filestore{
+		ctx:  fst.ctx,
 		cfg:  cfg,
 		node: node,
 		capi: capi,
